@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
+    <ProjectReference Include="..\..\src\VmpLauncher.Core\VmpLauncher.Core.csproj" />
+    <ProjectReference Include="..\..\src\VmpLauncher.Net\VmpLauncher.Net.csproj" />
+    <ProjectReference Include="..\..\src\VmpLauncher.Game\VmpLauncher.Game.csproj" />
+    <ProjectReference Include="..\..\src\VmpLauncher.App\VmpLauncher.App.csproj" />
+  </ItemGroup>
+</Project>

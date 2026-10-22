@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <AssemblyName>vmpl</AssemblyName>
+    <RootNamespace>VmpLauncher.Cli</RootNamespace>
+    <Description>vmpl command-line front end, used to verify every slice before the GUI.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="System.CommandLine" />
+    <ProjectReference Include="..\VmpLauncher.Core\VmpLauncher.Core.csproj" />
+    <ProjectReference Include="..\VmpLauncher.Ckan\VmpLauncher.Ckan.csproj" />
+    <ProjectReference Include="..\VmpLauncher.Net\VmpLauncher.Net.csproj" />
+    <ProjectReference Include="..\VmpLauncher.Game\VmpLauncher.Game.csproj" />
+    <ProjectReference Include="..\VmpLauncher.Publishing\VmpLauncher.Publishing.csproj" />
+  </ItemGroup>
+</Project>

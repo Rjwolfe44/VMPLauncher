@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>VmpLauncher.Ckan</RootNamespace>
+    <Description>Adapter over the CKAN Core library (git submodule pinned to v1.36.4).</Description>
+  </PropertyGroup>
+  <Import Project="..\..\eng\CkanVersionInfo.targets" />
+  <ItemGroup>
+    <ProjectReference Include="..\VmpLauncher.Core\VmpLauncher.Core.csproj" />
+    <!-- Build only the net10.0 inner build of the multi-targeted CKAN-core project. -->
+    <ProjectReference Include="..\..\external\CKAN\Core\CKAN-core.csproj"
+                      SetTargetFramework="TargetFramework=net10.0"
+                      SkipGetTargetFrameworkProperties="true"
+                      AdditionalProperties="GeneratePackageOnBuild=false;IsPackable=false" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="VmpLauncher.Tests" />
+    <InternalsVisibleTo Include="VmpLauncher.IntegrationTests" />
+  </ItemGroup>
+</Project>

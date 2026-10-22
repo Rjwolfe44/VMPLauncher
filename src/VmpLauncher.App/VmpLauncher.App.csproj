@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>VmpLauncher</AssemblyName>
+    <RootNamespace>VmpLauncher.App</RootNamespace>
+    <ApplicationIcon>Assets\VmpLauncher.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <StartupObject>VmpLauncher.App.Program</StartupObject>
+    <EnableDefaultApplicationDefinition>false</EnableDefaultApplicationDefinition>
+    <Version Condition="'$(Version)' == ''">0.1.0</Version>
+    <SelfContained>false</SelfContained>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="WPF-UI" />
+    <PackageReference Include="WPF-UI.DependencyInjection" />
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <PackageReference Include="Velopack" />
+    <ProjectReference Include="..\VmpLauncher.Core\VmpLauncher.Core.csproj" />
+    <ProjectReference Include="..\VmpLauncher.Ckan\VmpLauncher.Ckan.csproj" />
+    <ProjectReference Include="..\VmpLauncher.Net\VmpLauncher.Net.csproj" />
+    <ProjectReference Include="..\VmpLauncher.Game\VmpLauncher.Game.csproj" />
+    <ProjectReference Include="..\VmpLauncher.Publishing\VmpLauncher.Publishing.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Assets\**\*" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="VmpLauncher.Tests" />
+  </ItemGroup>
+</Project>

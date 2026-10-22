@@ -1,0 +1,12 @@
+bin/
+obj/
+artifacts/
+*.user
+*.suo
+.vs/
+TestResults/
+*.binlog
+# CKAN submodule build output lives inside the submodule (gitignored there too)
+external/CKAN/_build/
+# local developer state
+*.local.json

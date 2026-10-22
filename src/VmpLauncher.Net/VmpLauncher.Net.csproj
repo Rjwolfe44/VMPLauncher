@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>VmpLauncher.Net</RootNamespace>
+    <Description>VMP/Lidgren server probes, signed server directory, ZeroTier inspection, Connection Doctor engine.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\VmpLauncher.Core\VmpLauncher.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="System.ServiceProcess.ServiceController" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Vendored Lidgren.Network (MIT) exactly as VMP's server/client build it; refresh with tools\Sync-Lidgren.ps1.
+         Diagnostics for these files are silenced by external\Lidgren\.editorconfig. -->
+    <Compile Include="..\..\external\Lidgren\**\*.cs" Exclude="..\..\external\Lidgren\Properties\**" LinkBase="Lidgren" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="VmpLauncher.Tests" />
+  </ItemGroup>
+</Project>

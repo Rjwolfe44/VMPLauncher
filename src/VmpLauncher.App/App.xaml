@@ -1,0 +1,30 @@
+<Application
+    x:Class="VmpLauncher.App.App"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    xmlns:conv="clr-namespace:VmpLauncher.App.Converters"
+    ShutdownMode="OnMainWindowClose">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ui:ThemesDictionary Theme="Dark" />
+                <ui:ControlsDictionary />
+                <ResourceDictionary Source="pack://application:,,,/VmpLauncher;component/Themes/Space.xaml" />
+                <ResourceDictionary>
+                    <conv:BoolToVisibilityConverter x:Key="BoolToVisibility" />
+                    <conv:BoolToVisibilityConverter x:Key="InvertedBoolToVisibility" Invert="True" />
+                    <conv:NullToVisibilityConverter x:Key="NullToVisibility" />
+                    <conv:NullToVisibilityConverter x:Key="NullToVisibilityInverted" Invert="True" />
+                    <conv:StatusKindToBrushConverter x:Key="StatusKindToBrush" />
+                    <conv:StatusKindToSymbolConverter x:Key="StatusKindToSymbol" />
+                    <conv:BoolToStatusBrushConverter x:Key="BoolToStatusBrush" />
+                    <conv:BoolToSymbolConverter x:Key="BoolToSymbol" />
+                    <conv:IntEqualsToVisibilityConverter x:Key="IntEqualsToVisibility" />
+                    <conv:PasswordPlaceholderConverter x:Key="PasswordPlaceholder" />
+                </ResourceDictionary>
+                <ResourceDictionary Source="pack://application:,,,/VmpLauncher;component/Themes/Controls.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>
