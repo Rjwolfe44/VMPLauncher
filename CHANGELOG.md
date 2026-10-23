@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.1
+
+- Turning off Settings > Beta channel now really switches back to stable releases. Before, a launcher installed from a
+  beta kept looking for betas only, found none among the stable releases and said it was up to date. A beta newer
+  than the stable release stays installed until stable catches up (no downgrade).
+- Stable releases are now also published to the beta channel, so beta testers get them too. This release reaches
+  every launcher, including betas that were stuck with the switch off.
+- An update that stops on DLLs the pack doesn't know (an extra mod dropped into the launcher's copy) now moves them to
+  the copy's quarantine folder and tries again, like it already does for changed files.
+
 ## 0.3.0
 
 The mod manager from the 0.3.0 betas is now on the stable channel, plus pack updates that need no clicks.
