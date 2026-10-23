@@ -23,6 +23,9 @@ public enum ErrorCode
     VerifyFailed,
     RollbackFailed,
     Cancelled,
+    NetworkUnavailable,
+    ModConflict,
+    CkanBusy,
 }
 
 /// <summary>Suggested next step shown in the UI next to the error.</summary>

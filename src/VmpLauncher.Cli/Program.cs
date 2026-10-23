@@ -20,6 +20,7 @@ internal static class Program
         root.Subcommands.Add(version);
         root.Subcommands.Add(Commands.CkanCommands.Build(dataDir));
         root.Subcommands.Add(Commands.LockCommands.Build(dataDir));
+        root.Subcommands.Add(Commands.CatalogCommands.Build(dataDir));
         foreach (var c in Commands.ProfileCommands.Build(dataDir))
         {
             root.Subcommands.Add(c);

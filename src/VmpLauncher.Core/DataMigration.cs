@@ -15,7 +15,7 @@ public static class DataMigration
     /// <summary>Everything the launcher writes into its data root.</summary>
     public static readonly IReadOnlyList<string> Items = new[]
     {
-        "cache", "ckan", "logs", "profiles", "probe", "settings.json", "secrets.bin", "capture-cache.json",
+        "cache", "ckan", "logs", "profiles", "probe", "modinfo", "settings.json", "secrets.bin", "capture-cache.json",
     };
 
     // JSON under these folders never holds launcher paths and can be huge (game files, CKAN repo data, snapshots).
