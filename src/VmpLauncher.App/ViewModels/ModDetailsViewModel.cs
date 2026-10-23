@@ -52,8 +52,15 @@ public sealed partial class DescriptionImage : DescriptionBlock, System.Componen
 
     private async Task LoadAsync()
     {
-        _image = await _info.ImageAsync(Url, 900).ConfigureAwait(true);
-        PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(Image)));
+        try
+        {
+            _image = await _info.ImageAsync(Url, ModInfoService.PageWidth).ConfigureAwait(true);
+            PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(Image)));
+        }
+        catch (Exception)
+        {
+            // Pictures are decoration: a failed or dropped download just leaves the text.
+        }
     }
 }
 
@@ -202,7 +209,14 @@ public sealed partial class ModDetailsViewModel : ObservableObject
 
     private async Task LoadHeaderAsync(Uri url)
     {
-        Header = await _info.ImageAsync(url, 900).ConfigureAwait(true);
+        try
+        {
+            Header = await _info.ImageAsync(url, ModInfoService.PageWidth).ConfigureAwait(true);
+        }
+        catch (Exception)
+        {
+            // The coloured placeholder header stays.
+        }
     }
 
     private void AddLink(string label, Uri? url)

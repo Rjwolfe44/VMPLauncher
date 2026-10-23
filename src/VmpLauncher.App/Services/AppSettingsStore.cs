@@ -33,6 +33,8 @@ public sealed record AppSettings
     public bool KspOnMainMonitor { get; init; } = true;
     /// <summary>The setup the Mods page shows (null: the pack's).</summary>
     public string? ModsSetupId { get; init; }
+    /// <summary>The player has used the Mods page, so its catalog is loaded in the background at start.</summary>
+    public bool ModsOpened { get; init; }
 }
 
 public sealed class AppSettingsStore

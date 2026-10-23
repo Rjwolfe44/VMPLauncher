@@ -120,12 +120,17 @@ public sealed partial class ModRowViewModel : ObservableObject
     {
         try
         {
-            var image = await _info.HeaderImageAsync(Entry, 160).ConfigureAwait(true);
+            var image = await _info.RowImageAsync(Entry).ConfigureAwait(true);
             if (image is not null)
             {
                 _thumbnail = image;
                 OnPropertyChanged(nameof(Thumbnail));
             }
+        }
+        catch (OperationCanceledException)
+        {
+            // Dropped from a long queue after the player scrolled on: ask again when this row is shown again.
+            _thumbRequested = false;
         }
         catch (Exception)
         {

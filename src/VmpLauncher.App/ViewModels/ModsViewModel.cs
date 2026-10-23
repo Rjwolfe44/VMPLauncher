@@ -196,6 +196,10 @@ public sealed partial class ModsViewModel : ObservableObject
     /// <summary>Called when the page is shown: loads the catalog the first time.</summary>
     public async Task OnShownAsync()
     {
+        if (!_settings.Current.ModsOpened)
+        {
+            _settings.Update(s => s with { ModsOpened = true });
+        }
         var before = SelectedSetup?.Id;
         RefreshSetups();
         if (!_loadedOnce || SelectedSetup?.Id != before)

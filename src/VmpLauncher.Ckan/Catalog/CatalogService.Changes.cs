@@ -332,6 +332,7 @@ public sealed partial class CatalogService
         finally
         {
             RegistryManager.DisposeInstance(instance);
+            _lastContext = null;
         }
     }
 }

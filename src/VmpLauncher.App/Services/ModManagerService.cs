@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
 using VmpLauncher.Ckan.Backend;
 using VmpLauncher.Ckan.Catalog;
@@ -19,20 +20,51 @@ public sealed class ModManagerService
     private readonly LauncherService _launcher;
     private readonly OperationRunner _runner;
     private readonly ILogger<ModManagerService> _log;
+    private readonly AppSettingsStore _settings;
+    private readonly ConcurrentDictionary<string, Task<ModDetails>> _details = new(StringComparer.Ordinal);
     private CatalogService? _catalog;
     private Task<CatalogUpdateOutcome>? _updating;
 
-    public ModManagerService(LauncherPaths paths, CkanWorker worker, LauncherService launcher, OperationRunner runner, ILogger<ModManagerService> log)
+    public ModManagerService(LauncherPaths paths, CkanWorker worker, LauncherService launcher, OperationRunner runner, AppSettingsStore settings, ILogger<ModManagerService> log)
     {
         _paths = paths;
         _worker = worker;
         _launcher = launcher;
         _runner = runner;
+        _settings = settings;
         _log = log;
+        Changed += () => _details.Clear();
     }
 
     /// <summary>Raised (on any thread) after the catalog was refreshed or a setup's mods changed.</summary>
     public event Action? Changed;
+
+    /// <summary>
+    /// For players who use the Mods page: load the catalog from disk shortly after start (on the CKAN thread, while
+    /// they look at Home), so the page opens instantly. Players who never open it never pay its memory.
+    /// </summary>
+    public async Task WarmUpAsync()
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(8)).ConfigureAwait(false);
+            if (!_settings.Current.ModsOpened || _runner.IsBusy)
+            {
+                return;
+            }
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            await OnCatalog(c =>
+            {
+                c.EnsureLoaded();
+                return 0;
+            }, CancellationToken.None).ConfigureAwait(false);
+            _log.LogInformation("Mod catalog warmed up in {Seconds:F1} s", sw.Elapsed.TotalSeconds);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            _log.LogWarning(ex, "Warming up the mod catalog failed");
+        }
+    }
 
     public DateTimeOffset? CatalogUpdatedUtc { get; private set; }
 
@@ -97,8 +129,18 @@ public sealed class ModManagerService
     public Task<CatalogSnapshot> SnapshotAsync(SetupInfo setup, CancellationToken ct)
         => OnCatalog(c => c.Build(TargetFor(setup)), ct);
 
+    /// <summary>A mod's details; remembered until the catalog or the setup's mods change.</summary>
     public Task<ModDetails> DetailsAsync(SetupInfo setup, string identifier, CancellationToken ct)
-        => OnCatalog(c => c.Details(TargetFor(setup), identifier), ct);
+    {
+        var key = setup.Id + "|" + identifier;
+        if (_details.TryGetValue(key, out var cached) && !cached.IsFaulted && !cached.IsCanceled)
+        {
+            return cached;
+        }
+        var task = OnCatalog(c => c.Details(TargetFor(setup), identifier), ct);
+        _details[key] = task;
+        return task;
+    }
 
     public Task<ChangePlan> PreviewAsync(SetupInfo setup, ChangeRequest request, CancellationToken ct)
         => OnCatalog(c => c.Preview(TargetFor(setup), request), ct);

@@ -41,6 +41,7 @@ public sealed partial class CatalogService : IDisposable
     private State _state;
     private HashSet<string> _new;
     private bool _loaded;
+    private (string Key, Context Context)? _lastContext;
 
     /// <param name="repository">Tests: a local repository instead of KSP-CKAN/CKAN-meta.</param>
     /// <param name="reposDir">Tests: where parsed repository data and the catalog state live.</param>
@@ -131,6 +132,7 @@ public sealed partial class CatalogService : IDisposable
         }
         _state.UpdatedUtc = DateTimeOffset.UtcNow;
         LauncherJson.WriteFile(_stateFile, _state);
+        _lastContext = null;
         return new CatalogUpdateOutcome(result == RepositoryDataManager.UpdateResult.Updated, idents.Count, newMods, sw.Elapsed);
     }
 
@@ -145,9 +147,46 @@ public sealed partial class CatalogService : IDisposable
         public IReadOnlyCollection<Repository> Repos => Registry.Repositories.Values.ToList();
     }
 
+    /// <summary>
+    /// The setup's registry and compatibility context. Loading a registry (several MB for a big install) and sorting
+    /// 3,800 mods by compatibility takes a second, so the last one is reused until its registry file, CKAN's lock or
+    /// the pack's pins change.
+    /// </summary>
     private Context Open(CatalogTarget target)
     {
         EnsureLoaded();
+        var key = ContextKey(target);
+        if (_lastContext is { } cached && cached.Key == key)
+        {
+            return cached.Context;
+        }
+        var context = OpenUncached(target);
+        _lastContext = (key, context);
+        return context;
+    }
+
+    private static string ContextKey(CatalogTarget target)
+    {
+        var ckan = Path.Combine(target.GameDir, "CKAN");
+        static string Stamp(string file)
+        {
+            try
+            {
+                return File.Exists(file) ? File.GetLastWriteTimeUtc(file).Ticks.ToString(System.Globalization.CultureInfo.InvariantCulture) : "-";
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                return "?";
+            }
+        }
+        var pins = target.PackPins is null
+            ? "-"
+            : string.Join(";", target.PackPins.OrderBy(p => p.Key, StringComparer.Ordinal).Select(p => p.Key + "=" + p.Value)).GetHashCode(StringComparison.Ordinal).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        return string.Join("|", target.GameDir, Stamp(Path.Combine(ckan, "registry.json")), File.Exists(Path.Combine(ckan, "registry.locked")), pins, target.PackGameVersion);
+    }
+
+    private Context OpenUncached(CatalogTarget target)
+    {
         if (target.PackPins is not null)
         {
             // Pack setups: the pack's own registry only knows the pack's repository, so browse the full catalog against

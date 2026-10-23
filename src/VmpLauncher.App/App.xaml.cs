@@ -32,6 +32,7 @@ public partial class App : Application
         ApplyBrandAccent();
         Services.GetRequiredService<AccessibilityService>().Start();
         Services.GetRequiredService<UpdateService>().Start();
+        _ = Services.GetRequiredService<ModManagerService>().WarmUpAsync();
     }
 
     protected override void OnExit(ExitEventArgs e)

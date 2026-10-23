@@ -44,7 +44,7 @@ public sealed class SpaceDockClient
     private const string UserAgent = "VmpLauncher (+https://github.com/Rjwolfe44/VMPLauncher)";
     private const int MaxJsonBytes = 4 * 1024 * 1024;
     private const int MaxImageBytes = 8 * 1024 * 1024;
-    private const int MaxParallelRequests = 4;
+    private const int DefaultParallelRequests = 4;
 
     private static readonly Uri Site = new("https://spacedock.info/");
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(20);
@@ -55,13 +55,15 @@ public sealed class SpaceDockClient
     private readonly string _imageDir;
     private readonly TimeSpan _maxAge;
     private readonly HttpClient _http;
-    private readonly SemaphoreSlim _gate = new(MaxParallelRequests, MaxParallelRequests);
+    private readonly SemaphoreSlim _gate;
 
     /// <param name="cacheDir">Root folder for the cache; <c>spacedock\</c> and <c>img\</c> are created under it.</param>
     /// <param name="handler">Tests only: replaces the network. The caller keeps ownership of it.</param>
     /// <param name="maxAge">How long cached mod data counts as fresh; 7 days when omitted.</param>
-    public SpaceDockClient(string cacheDir, HttpMessageHandler? handler = null, TimeSpan? maxAge = null)
+    /// <param name="maxParallelRequests">Requests in flight at once (4 when omitted).</param>
+    public SpaceDockClient(string cacheDir, HttpMessageHandler? handler = null, TimeSpan? maxAge = null, int maxParallelRequests = DefaultParallelRequests)
     {
+        _gate = new SemaphoreSlim(Math.Clamp(maxParallelRequests, 1, 16), Math.Clamp(maxParallelRequests, 1, 16));
         ArgumentException.ThrowIfNullOrWhiteSpace(cacheDir);
         _dataDir = Path.Combine(cacheDir, "spacedock");
         _imageDir = Path.Combine(cacheDir, "img");
