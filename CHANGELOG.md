@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.2.1
+
+- Mods you already have in a normal CKAN download cache are reused instead of downloaded again: matched by CKAN's file
+  name, checked against the pack's hash, and hard-linked (no extra disk space on the same drive). A full install on a
+  PC with CKAN's cache took 2 minutes and downloaded nothing.
+- Settings: "Your CKAN download cache" shows its size and what is shared with the launcher; "Transfer the pack's
+  mods" takes them over without copying, "Clear CKAN's cache" frees the rest (asks first, not while CKAN runs).
+- Settings: "Clean up old downloads" removes archives neither the current pack nor your install still uses.
+- Downloads show percent, speed and time left.
+- Launcher updates install by themselves when you close the launcher; no restart click needed.
+- The launcher opens on the main monitor, and Play starts KSP on the main monitor (Settings switch).
+- Host tools: the token button opens GitHub's page pre-filled; publishing no longer shows on Home.
+
 ## 0.2.0
 
 ### Launcher UI (rebuilt)
