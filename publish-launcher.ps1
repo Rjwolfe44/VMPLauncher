@@ -4,12 +4,16 @@
 .PARAMETER Channel  win | beta
 .PARAMETER Publish  Publish the release immediately instead of leaving it as a draft
 .PARAMETER Pre      Mark as pre-release
+.PARAMETER Merge    Add to an existing release with the same tag. Stable releases also go to the beta feed so beta
+                    testers get them: build.ps1 -Version X; publish -Version X -Publish; then
+                    build.ps1 -Version X -Channel beta; publish -Version X -Channel beta -Publish -Merge.
 #>
 param(
     [Parameter(Mandatory)][string]$Version,
     [ValidateSet('win', 'beta')][string]$Channel = 'win',
     [switch]$Publish,
-    [switch]$Pre
+    [switch]$Pre,
+    [switch]$Merge
 )
 $ErrorActionPreference = 'Stop'
 $repo = $PSScriptRoot
@@ -24,6 +28,7 @@ $args = @('vpk', 'upload', 'github', '--repoUrl', 'https://github.com/Rjwolfe44/
           '--token', $token, '--tag', "v$Version", '--releaseName', "VMP Launcher $Version", '--channel', $Channel)
 if ($Publish) { $args += '--publish' }
 if ($Pre) { $args += '--pre' }
+if ($Merge) { $args += '--merge' }
 Write-Host "About to upload $Version to GitHub Releases ($(if ($Publish) { 'PUBLISHED' } else { 'draft' }))." -ForegroundColor Yellow
 dotnet @args
 if ($LASTEXITCODE) { throw 'vpk upload failed' }

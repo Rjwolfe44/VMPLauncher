@@ -199,9 +199,11 @@ public sealed class LauncherService : IDisposable
         catch (LauncherException ex) when (ex.Code == ErrorCode.VerifyFailed && GetStatus().State is ProfileState.UpdateAvailable or ProfileState.Modified)
         {
             // The update rolled back because files changed since the last install (KSP redraws some part icons, a player
-            // edits a config). Put them back from the cached downloads, as Repair does, and try once more.
+            // edits a config). Put them back from the cached downloads, as Repair does, and try once more. DLLs the pack
+            // does not know would fail it again (and the server's mod check), so they move to the profile's quarantine.
             _log.LogWarning("Update failed its final check ({Details}); repairing and retrying once", string.Join("; ", ex.Details));
-            await RepairAsync(false, outer).ConfigureAwait(false);
+            var strayDlls = ex.Details.Any(d => d.StartsWith("unknown dll ", StringComparison.Ordinal));
+            await RepairAsync(strayDlls, outer).ConfigureAwait(false);
             return await InstallOrUpdateCoreAsync(outer).ConfigureAwait(false);
         }
     }

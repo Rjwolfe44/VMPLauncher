@@ -58,7 +58,11 @@ public sealed partial class UpdateService : ObservableObject, IDisposable
         try
         {
             var beta = _channel == "beta";
-            _manager = new UpdateManager(new GithubSource(RepoUrl, null, beta), new UpdateOptions { ExplicitChannel = beta ? "beta" : null });
+            // Name the channel both ways: left empty, Velopack keeps the channel the installed copy was built for, so a
+            // beta install with the beta switch off looked for beta builds among stable releases and never found any.
+            // No downgrade: a beta newer than stable stays until stable catches up.
+            _manager = new UpdateManager(new GithubSource(RepoUrl, null, beta),
+                new UpdateOptions { ExplicitChannel = beta ? "beta" : "win", AllowVersionDowngrade = false });
             if (!_manager.IsInstalled)
             {
                 IsDevelopmentBuild = true;
