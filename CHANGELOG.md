@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.3.2
+
+Ways out of a stuck pack copy, always one click away.
+
+- **Doctor > Fix the pack copy**: Check and repair files (puts back changed or missing files, moves DLLs the pack
+  doesn't know to the copy's quarantine folder), Restore (finishes or undoes an interrupted update), **Reinstall the pack
+  copy** (a fresh copy that keeps your saves, craft, missions, screenshots, KSP settings and mod settings), Copy report
+  and Open logs.
+- **Reinstall** is the last resort for anything Repair and Restore can't fix. It sets the old copy aside first and puts
+  it back as it was if anything fails; only then is it deleted. Private mods are fetched before anything moves, and
+  your own KSP folder is never touched.
+- **Error cards have buttons**: the fix for that error (Repair files, Restore, Reinstall, Choose KSP folder, Private
+  mods), Troubleshoot, and Copy report, a report for the host with passwords and your user name removed. Tips that
+  pointed at buttons that no longer exist are fixed.
+- **Home has a Repair button** (the wrench) whenever the pack is installed, including while an update is waiting.
+- An update that still fails after its automatic repair now offers Reinstall instead of leaving you stuck.
+- A CKAN lock file left behind by a power cut or crash no longer blocks the pack copy or a setup forever: a lock
+  nobody holds is removed by itself.
+
 ## 0.3.1
 
 - Turning off Settings > Beta channel now really switches back to stable releases. Before, a launcher installed from a
