@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0-beta.2
+
+- Mod pictures load much faster. SpaceDock only serves full-size pictures (about 1 MB each), so each one is now
+  downloaded once, shrunk to the size it is shown at and kept as a small file (about 3 KB for a list tile); after
+  that it loads from disk instantly. The rows on screen load first, with up to 8 downloads at once.
+- Mod pages reopen instantly, and switching between mods no longer reloads the setup's mod list from disk.
+- Once you have used the Mods page, the launcher loads the CKAN mod list in the background shortly after it starts,
+  so the page opens without the wait.
+
 ## 0.3.0-beta.1
 
 First beta of the mod manager, on the beta channel only (Settings > Beta channel). Switching the channel now takes
