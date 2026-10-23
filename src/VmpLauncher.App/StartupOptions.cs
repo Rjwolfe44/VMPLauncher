@@ -4,9 +4,10 @@ namespace VmpLauncher.App;
 /// Command-line options. Supported:
 /// <c>--data-dir &lt;path&gt;</c> (isolated launcher state, used by tests and the clean-profile proof),
 /// <c>--no-backdrop</c> (force the solid fallback instead of Mica),
+/// <c>--background</c> (dev screenshots: open without taking focus, on a secondary monitor when there is one),
 /// and a single positional activation argument: a <c>vmpack://</c> URL or a <c>*.vmpack</c> file path.
 /// </summary>
-public sealed record StartupOptions(string? DataDir, bool NoBackdrop, string? Activation, string? StartPage = null)
+public sealed record StartupOptions(string? DataDir, bool NoBackdrop, string? Activation, string? StartPage = null, bool Background = false)
 {
     public static StartupOptions Parse(string[] args)
     {
@@ -14,6 +15,7 @@ public sealed record StartupOptions(string? DataDir, bool NoBackdrop, string? Ac
         var noBackdrop = false;
         string? activation = null;
         string? page = null;
+        var background = false;
         for (var i = 0; i < args.Length; i++)
         {
             switch (args[i])
@@ -27,6 +29,9 @@ public sealed record StartupOptions(string? DataDir, bool NoBackdrop, string? Ac
                 case "--no-backdrop":
                     noBackdrop = true;
                     break;
+                case "--background":
+                    background = true;
+                    break;
                 default:
                     if (!args[i].StartsWith("--", StringComparison.Ordinal))
                     {
@@ -35,6 +40,6 @@ public sealed record StartupOptions(string? DataDir, bool NoBackdrop, string? Ac
                     break;
             }
         }
-        return new StartupOptions(dataDir, noBackdrop, activation, page);
+        return new StartupOptions(dataDir, noBackdrop, activation, page, background);
     }
 }

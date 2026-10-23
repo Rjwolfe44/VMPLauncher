@@ -43,6 +43,12 @@ public partial class MainWindow : FluentWindow
         DataContext = viewModel;
         InitializeComponent();
         PlaceOnPrimaryMonitor();
+        if (options.Background)
+        {
+            // Dev screenshots while the player is in a game: no focus change, and on another monitor when there is one.
+            ShowActivated = false;
+            SourceInitialized += (_, _) => SecondaryMonitor.MoveTo(new System.Windows.Interop.WindowInteropHelper(this).Handle);
+        }
 
         navigator.Attach(PageHost);
         snackbar.SetSnackbarPresenter(SnackbarPresenter);

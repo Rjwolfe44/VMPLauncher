@@ -39,10 +39,11 @@ public sealed class LauncherService : IDisposable
     private readonly PrivateModsService _private;
     private readonly OperationRunner _runner;
     private readonly ILogger<LauncherService> _log;
-    private readonly VmpLauncher.Ckan.Backend.CkanWorker _worker = new();
+    private readonly VmpLauncher.Ckan.Backend.CkanWorker _worker;
 
-    public LauncherService(LauncherPaths paths, AppSettingsStore settings, ISecretStore secrets, PackCatalogService catalog, PrivateModsService privateMods, OperationRunner runner, ILogger<LauncherService> log)
+    public LauncherService(LauncherPaths paths, AppSettingsStore settings, ISecretStore secrets, PackCatalogService catalog, PrivateModsService privateMods, OperationRunner runner, VmpLauncher.Ckan.Backend.CkanWorker worker, ILogger<LauncherService> log)
     {
+        _worker = worker;
         _paths = paths;
         _settings = settings;
         _secrets = secrets;

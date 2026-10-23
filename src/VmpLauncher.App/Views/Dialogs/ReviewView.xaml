@@ -1,0 +1,109 @@
+<UserControl
+    x:Class="VmpLauncher.App.Views.Dialogs.ReviewView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    xmlns:vm="clr-namespace:VmpLauncher.App.ViewModels"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    d:DataContext="{d:DesignInstance vm:ReviewViewModel}"
+    MinWidth="620">
+    <UserControl.Resources>
+        <DataTemplate x:Key="ChangeTemplate" DataType="{x:Type vm:ChangeRow}">
+            <Grid Margin="0,3">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock TextTrimming="CharacterEllipsis">
+                    <Run Text="{Binding Name, Mode=OneWay}" FontWeight="SemiBold" Foreground="{StaticResource Space.Text.PrimaryBrush}" />
+                    <Run Text="  " /><Run Text="{Binding Version, Mode=OneWay}" FontFamily="{StaticResource Space.Font.Mono}" FontSize="12" Foreground="{StaticResource Space.Text.SecondaryBrush}" />
+                    <Run Text="  " /><Run Text="{Binding Reason, Mode=OneWay}" FontSize="12" Foreground="{StaticResource Space.Text.SecondaryBrush}" />
+                </TextBlock>
+                <TextBlock Grid.Column="1" Text="{Binding Size}" FontSize="12" Foreground="{StaticResource Space.Text.SecondaryBrush}" Margin="12,0,0,0" />
+            </Grid>
+        </DataTemplate>
+    </UserControl.Resources>
+    <Grid>
+        <ScrollViewer MaxHeight="520" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Margin="0,0,10,0">
+                <TextBlock Style="{StaticResource Space.Style.Secondary}" Text="{Binding Summary}" TextWrapping="Wrap" />
+
+                <ItemsControl ItemsSource="{Binding Problems}" Margin="0,12,0,0" Visibility="{Binding HasProblems, Converter={StaticResource BoolToVisibility}}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="#FF2A1520" BorderBrush="#FF7A3445" BorderThickness="1" CornerRadius="10" Padding="12,8" Margin="0,0,0,6">
+                                <StackPanel Orientation="Horizontal">
+                                    <ui:SymbolIcon Symbol="ErrorCircle20" Filled="True" Foreground="{StaticResource Space.Status.ErrorBrush}" Margin="0,0,8,0" />
+                                    <TextBlock Text="{Binding}" TextWrapping="Wrap" MaxWidth="660" Foreground="{StaticResource Space.Text.PrimaryBrush}" />
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <ItemsControl ItemsSource="{Binding Notes}" Margin="0,10,0,0" Visibility="{Binding HasNotes, Converter={StaticResource BoolToVisibility}}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                <ui:SymbolIcon Symbol="Info16" Foreground="{StaticResource Space.Status.InfoBrush}" Margin="0,0,8,0" />
+                                <TextBlock Text="{Binding}" TextWrapping="Wrap" MaxWidth="660" Foreground="{StaticResource Space.Text.SecondaryBrush}" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <Border Style="{StaticResource Space.Card.Accent}" Padding="14,12" Margin="0,12,0,0" Visibility="{Binding HasChoice, Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource Space.Style.Body}" FontWeight="SemiBold" Text="{Binding ChoiceTitle}" TextWrapping="Wrap" />
+                        <ListBox ItemsSource="{Binding Choices}" SelectedItem="{Binding SelectedChoice}" Margin="0,8,0,0" MaxHeight="220" Background="Transparent" BorderThickness="0">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:ChoiceRow}">
+                                    <StackPanel Margin="0,2">
+                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Foreground="{StaticResource Space.Text.PrimaryBrush}" />
+                                        <TextBlock Text="{Binding Detail}" FontSize="12" Foreground="{StaticResource Space.Text.SecondaryBrush}" TextTrimming="CharacterEllipsis" MaxWidth="660" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </StackPanel>
+                </Border>
+
+                <StackPanel Margin="0,14,0,0" Visibility="{Binding HasInstalls, Converter={StaticResource BoolToVisibility}}">
+                    <TextBlock Style="{StaticResource Space.Style.Overline}" Text="WILL INSTALL" Margin="0,0,0,4" />
+                    <ItemsControl ItemsSource="{Binding Installs}" ItemTemplate="{StaticResource ChangeTemplate}" />
+                </StackPanel>
+                <StackPanel Margin="0,14,0,0" Visibility="{Binding HasUpgrades, Converter={StaticResource BoolToVisibility}}">
+                    <TextBlock Style="{StaticResource Space.Style.Overline}" Text="WILL UPDATE" Margin="0,0,0,4" />
+                    <ItemsControl ItemsSource="{Binding Upgrades}" ItemTemplate="{StaticResource ChangeTemplate}" />
+                </StackPanel>
+                <StackPanel Margin="0,14,0,0" Visibility="{Binding HasRemovals, Converter={StaticResource BoolToVisibility}}">
+                    <TextBlock Style="{StaticResource Space.Style.Overline}" Text="WILL REMOVE" Margin="0,0,0,4" />
+                    <ItemsControl ItemsSource="{Binding Removals}" ItemTemplate="{StaticResource ChangeTemplate}" />
+                </StackPanel>
+
+                <StackPanel Margin="0,16,0,0" Visibility="{Binding HasSuggestions, Converter={StaticResource BoolToVisibility}}">
+                    <TextBlock Style="{StaticResource Space.Style.Overline}" Text="ALSO WORTH ADDING" Margin="0,0,0,4" />
+                    <ItemsControl ItemsSource="{Binding Suggestions}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:SuggestionRow}">
+                                <CheckBox IsChecked="{Binding IsChecked}" Margin="0,2">
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Foreground="{StaticResource Space.Text.PrimaryBrush}" />
+                                        <TextBlock Text="{Binding Detail}" FontSize="12" Foreground="{StaticResource Space.Text.SecondaryBrush}" TextTrimming="CharacterEllipsis" MaxWidth="620" />
+                                    </StackPanel>
+                                </CheckBox>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+                <TextBlock Style="{StaticResource Space.Style.Caption}" Margin="0,16,0,0" TextWrapping="Wrap"
+                           Text="Everything runs as one change: if a download or install fails, or you cancel, this setup is left exactly as it was." />
+            </StackPanel>
+        </ScrollViewer>
+        <Border Background="#99131628" CornerRadius="10" Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}">
+            <ui:ProgressRing IsIndeterminate="True" Width="32" Height="32" />
+        </Border>
+    </Grid>
+</UserControl>

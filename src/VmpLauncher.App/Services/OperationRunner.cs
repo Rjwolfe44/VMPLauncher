@@ -15,6 +15,10 @@ public enum OperationKind
     Capture,
     Publish,
     Cleanup,
+    /// <summary>Installing, removing or updating mods in a custom or existing setup.</summary>
+    Mods,
+    /// <summary>Making or removing a setup (a KSP copy).</summary>
+    Setup,
 }
 
 /// <summary>Latest known state of the running operation; sampled by the UI at 10 Hz, never pushed per event.</summary>

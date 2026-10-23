@@ -31,6 +31,8 @@ public sealed record AppSettings
     public bool AutoUpdatePack { get; init; } = true;
     /// <summary>Start KSP on the primary monitor (Unity otherwise reuses whatever monitor it ran on last).</summary>
     public bool KspOnMainMonitor { get; init; } = true;
+    /// <summary>The setup the Mods page shows (null: the pack's).</summary>
+    public string? ModsSetupId { get; init; }
 }
 
 public sealed class AppSettingsStore

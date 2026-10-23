@@ -15,7 +15,7 @@ namespace VmpLauncher.App.Services;
 /// <summary>What the Home page shows: the resolved lock of the pack's current channel plus its trust level.</summary>
 public sealed record ResolvedPack(PackLock Lock, string LockPath, string InventoryPath, string LockSha256, TrustLevel Trust, string? TrustReason, string Source);
 
-public sealed record CatalogEntry(string Id, string Name, string Path, string? BannerUrl, string? MinLauncherVersion);
+public sealed record PackCatalogEntry(string Id, string Name, string Path, string? BannerUrl, string? MinLauncherVersion);
 
 public sealed record ChannelFile(string Schema, string PackId, Dictionary<string, ChannelPointer> Channels);
 public sealed record ChannelPointer(string Version, string Lock, string Sha256);
@@ -81,7 +81,7 @@ public sealed class PackCatalogService
         var catalogUrl = _settings.Current.CatalogUrl ?? DefaultCatalogUrl;
         var baseUri = new Uri(catalogUrl);
         var catalogJson = await GetStringAsync(baseUri, ct).ConfigureAwait(false);
-        var entries = JsonSerializer.Deserialize<List<CatalogEntry>>(catalogJson, LauncherJson.Pretty) ?? new List<CatalogEntry>();
+        var entries = JsonSerializer.Deserialize<List<PackCatalogEntry>>(catalogJson, LauncherJson.Pretty) ?? new List<PackCatalogEntry>();
         var entry = entries.FirstOrDefault(e => string.Equals(e.Id, packId, StringComparison.OrdinalIgnoreCase))
                     ?? throw new LauncherException(ErrorCode.InvalidPack, $"The catalog has no pack named '{packId}'.");
         var packBase = new Uri(baseUri, entry.Path.TrimEnd('/') + "/");

@@ -33,6 +33,9 @@ public static class ErrorCatalog
                 ErrorCode.InvalidLock or ErrorCode.InvalidPack => ("Pack cannot be read", "Ask the host to re-export the pack."),
                 ErrorCode.VerifyFailed => ("Files do not match the pack", "Run Repair to restore them."),
                 ErrorCode.RollbackFailed => ("Could not restore automatically", "Your previous files are kept in the profile's snapshots folder."),
+                ErrorCode.NetworkUnavailable => ("No connection", "Check your internet connection and try again. The mod list you already have still works."),
+                ErrorCode.ModConflict => ("These mods do not fit together", "Remove one of the conflicting mods from your changes and review again."),
+                ErrorCode.CkanBusy => ("CKAN has this KSP folder open", "Close CKAN and try again."),
                 ErrorCode.InstallFailed => ("Installation failed", "Your previous setup was restored. Try again; if it repeats, copy the diagnostics for the host."),
                 _ => ("Something went wrong", null),
             };

@@ -1,0 +1,45 @@
+<UserControl
+    x:Class="VmpLauncher.App.Views.Dialogs.NewSetupView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    xmlns:vm="clr-namespace:VmpLauncher.App.ViewModels"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    d:DataContext="{d:DesignInstance vm:NewSetupViewModel}"
+    MinWidth="560">
+    <StackPanel>
+        <TextBlock Style="{StaticResource Space.Style.Secondary}" TextWrapping="Wrap"
+                   Text="A setup is one KSP folder with its own mods. Make as many as you like and switch between them on the Mods page." />
+
+        <UniformGrid Columns="2" Margin="0,14,0,0">
+            <RadioButton Style="{StaticResource Space.ChoiceCard}" GroupName="setupKind" IsChecked="{Binding MakeCopy}" Margin="0,0,6,0">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource Space.Style.Body}" FontWeight="SemiBold" Text="Fresh copy of KSP" />
+                    <TextBlock Style="{StaticResource Space.Style.Caption}" Text="Clean game, no mods. Recommended." TextWrapping="Wrap" />
+                </StackPanel>
+            </RadioButton>
+            <RadioButton Style="{StaticResource Space.ChoiceCard}" GroupName="setupKind" IsChecked="{Binding MakeCopy, Converter={StaticResource InvertBool}}" Margin="6,0,0,0">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource Space.Style.Body}" FontWeight="SemiBold" Text="Use a KSP folder I have" />
+                    <TextBlock Style="{StaticResource Space.Style.Caption}" Text="Manage its mods in place, like CKAN." TextWrapping="Wrap" />
+                </StackPanel>
+            </RadioButton>
+        </UniformGrid>
+        <TextBlock Style="{StaticResource Space.Style.Caption}" Text="{Binding Explanation}" TextWrapping="Wrap" Margin="2,10,0,0" />
+
+        <TextBlock Style="{StaticResource Space.Style.Overline}" Text="NAME" Margin="0,16,0,4" />
+        <ui:TextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" PlaceholderText="e.g. Career with visual mods" MaxLength="60" AutomationProperties.Name="Setup name" />
+
+        <TextBlock Style="{StaticResource Space.Style.Overline}" Text="{Binding SourceLabel}" Margin="0,16,0,4" />
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <ComboBox ItemsSource="{Binding Installs}" SelectedItem="{Binding SelectedInstall}" DisplayMemberPath="Label" AutomationProperties.Name="KSP folder" />
+            <ui:Button Grid.Column="1" Content="Browse…" Icon="{ui:SymbolIcon FolderOpen24}" Command="{Binding BrowseCommand}" Margin="8,0,0,0" />
+        </Grid>
+    </StackPanel>
+</UserControl>

@@ -23,10 +23,24 @@ public sealed partial class UpdateService : ObservableObject, IDisposable
     private UpdateInfo? _pending;
     private VelopackAsset? _pendingAsset;
     private Timer? _timer;
+    private string? _channel;
 
     public UpdateService(AppSettingsStore settings, OperationRunner runner, ILogger<UpdateService> log)
     {
         _settings = settings;
+        // Switching the beta channel in Settings takes effect at once (no restart needed to look for the other feed).
+        settings.Changed += s =>
+        {
+            if (_channel is not null && s.UpdateChannel != _channel)
+            {
+                log.LogInformation("Update channel changed to {Channel}", s.UpdateChannel);
+                Start();
+                if (!s.AutoCheckUpdates)
+                {
+                    _ = CheckAsync();
+                }
+            }
+        };
         _runner = runner;
         _log = log;
     }
@@ -38,9 +52,12 @@ public sealed partial class UpdateService : ObservableObject, IDisposable
 
     public void Start()
     {
+        _timer?.Dispose();
+        _timer = null;
+        _channel = _settings.Current.UpdateChannel;
         try
         {
-            var beta = _settings.Current.UpdateChannel == "beta";
+            var beta = _channel == "beta";
             _manager = new UpdateManager(new GithubSource(RepoUrl, null, beta), new UpdateOptions { ExplicitChannel = beta ? "beta" : null });
             if (!_manager.IsInstalled)
             {
