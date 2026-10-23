@@ -95,8 +95,9 @@ public partial class HomeViewModel : ObservableObject
 
     public ObservableCollection<RequirementRow> Requirements { get; } = new();
 
-    /// <summary>Called when the page becomes visible: refresh unless the data is fresh.</summary>
-    public Task OnShownAsync() => DateTimeOffset.UtcNow - _lastRefresh > StaleAfter ? RefreshCommand.ExecuteAsync(null) : Task.CompletedTask;
+    /// <summary>Called when the page becomes visible: refresh unless the data is fresh or a refresh is running
+    /// (a second ExecuteAsync would cancel the first one's network call).</summary>
+    public Task OnShownAsync() => !RefreshCommand.IsRunning && DateTimeOffset.UtcNow - _lastRefresh > StaleAfter ? RefreshCommand.ExecuteAsync(null) : Task.CompletedTask;
 
     [RelayCommand]
     public async Task RefreshAsync(CancellationToken ct)

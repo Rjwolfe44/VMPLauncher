@@ -57,7 +57,7 @@ public sealed class PackCatalogService
         {
             return await ResolveOnlineAsync(packId, ct).ConfigureAwait(false);
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or IOException or JsonException)
+        catch (Exception ex) when ((ex is HttpRequestException or TaskCanceledException or IOException or JsonException) && !ct.IsCancellationRequested)
         {
             _log.LogWarning(ex, "Catalog fetch failed; trying cached copy");
             var cachedDir = Path.Combine(PackCacheDir, packId);

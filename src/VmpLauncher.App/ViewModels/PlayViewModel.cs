@@ -71,6 +71,7 @@ public partial class PlayViewModel : ObservableObject
     [ObservableProperty] private bool _hasPassword;
     [ObservableProperty] private string _passwordInput = string.Empty;
     [ObservableProperty] private bool _canPlay;
+    [ObservableProperty] private bool _canLaunchOffline;
     [ObservableProperty] private string _playHint = string.Empty;
     [ObservableProperty] private bool _gameRunning;
     [ObservableProperty] private string _runningSince = string.Empty;
@@ -194,6 +195,7 @@ public partial class PlayViewModel : ObservableObject
         var disclaimer = _settings.Current.DisclaimerAccepted;
         Preflight.Add(new RequirementRow { Label = "VMP disclaimer", Ok = disclaimer, Detail = disclaimer ? "accepted" : "accept it in Settings or in-game" });
         CanPlay = installed && nameOk && route is not null && !GameRunning;
+        CanLaunchOffline = installed && !GameRunning;
         PlayHint = !installed ? "Install the pack from Home first."
                  : !nameOk ? "Enter a player name."
                  : GameRunning ? "KSP is running."
@@ -206,14 +208,21 @@ public partial class PlayViewModel : ObservableObject
     private void GoHome() => _navigation.Navigate(AppPage.Home);
 
     [RelayCommand]
-    private async Task PlayAsync(CancellationToken ct)
+    private Task PlayAsync(CancellationToken ct)
+        => RunGameAsync(() => Server.Selected?.EntryName ?? throw new InvalidOperationException("Pick a server route."), ct);
+
+    /// <summary>Starts KSP with the pack's mods but without joining: single-player, or connect later from the VMP window.</summary>
+    [RelayCommand]
+    private Task LaunchOfflineAsync(CancellationToken ct) => RunGameAsync(() => null, ct);
+
+    private async Task RunGameAsync(Func<string?> joinEntry, CancellationToken ct)
     {
         Error = null;
         try
         {
-            var route = Server.Selected ?? throw new InvalidOperationException("Pick a server route.");
+            var join = joinEntry();
             var entries = Routes.Select(r => new VmpSettingsFile.ServerEntry(r.EntryName, r.Host, r.Port, null)).ToList();
-            using var process = _launcher.Launch(route.EntryName, entries);
+            using var process = _launcher.Launch(join, entries);
             GameRunning = true;
             RunningSince = DateTime.Now.ToString("HH:mm");
             UpdatePreflight();
