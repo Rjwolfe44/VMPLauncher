@@ -16,6 +16,32 @@ instead of a multi-gigabyte zip, keeps it verified against the server, and joins
 - **Works behind CGNAT.** Friends only need outbound UDP; the host's Playit tunnel (free tier) does the rest, with
   ZeroTier as a fallback.
 - **Free and light.** Framework-dependent build (~15 MB installed), auto-updates via Velopack + GitHub Releases.
+- **A full mod manager too.** Browse all ~3,800 CKAN mods with pictures and descriptions from SpaceDock, install,
+  remove and update any of them, keep several KSP setups side by side, and share a setup with a code or a file.
+
+## Mod manager
+
+The **Mods** page works like a cleaner CKAN:
+
+- **Setups.** The pack's own copy (browse-only: its mods match the server), plus as many others as you like: a
+  *fresh copy* of KSP (stock files hard-linked from your install, so it costs almost no space) or *a KSP folder you
+  already have* (Steam, or one CKAN manages: both tools read and write the same CKAN mod list). **Play** starts KSP
+  from the selected setup. Removing a launcher copy deletes it; removing your own folder only makes the launcher
+  forget it.
+- **Browse.** Search by name, author or what a mod does; filter to compatible, new, already downloaded or everything;
+  sort by popularity, recent updates, name or size. Each mod has a page with its SpaceDock picture, description and
+  screenshots, links, what it needs, recommends or conflicts with, and its versions with changelogs.
+- **Change.** Queue installs, removals and updates, then **Review**: CKAN's resolver shows every dependency it adds,
+  every mod that has to go with a removed one, conflicts, recommended extras, and asks you to pick when several mods
+  can provide something (e.g. Scatterer's sunflare). Everything is applied as one change: if a download or install
+  fails, or you cancel, the setup stays exactly as it was. Archives already in your CKAN cache are reused.
+- **Share.** **Share** gives a `VMPSHARE1-…` code (fits a chat message for small setups) and a `.vmpack` file; your
+  friend pastes the code into **Import** or double-clicks the file. They see what is inside, get a new copy of their
+  KSP with the same mods at the same versions, and review before anything installs. Only mods from CKAN are shared.
+
+The CKAN mod list is the launcher's own copy (refreshed every few days, or with the refresh button); your own CKAN's
+settings, instances and cache are only read, never changed. The full list takes about 0.5–0.8 GB of memory while the
+Mods page has been opened.
 
 ## For friends
 

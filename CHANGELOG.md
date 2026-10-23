@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.3.0-beta.1
+
+First beta of the mod manager, on the beta channel only (Settings > Beta channel). Switching the channel now takes
+effect without restarting the launcher.
+
+- **Mod manager.** The Mods page now browses the whole CKAN catalog (about 3,800 mods) for any setup: search by name,
+  author or description, filters (compatible, installed, updates, new, already downloaded, not for this KSP), tags and
+  sorting, with SpaceDock pictures and descriptions on every mod's page.
+- **Setups.** Make fresh KSP copies (hard links, almost no extra space) or manage a KSP folder you already have, and
+  switch between them. Play starts KSP from any setup. The pack's copy stays browse-only so it always matches the
+  server; "Make a custom copy" starts a free one.
+- **Install, remove, update any mod.** Changes are queued and reviewed: dependencies, removals that cascade, conflicts,
+  recommended extras and "pick which mod provides X" are all shown before anything changes, and the whole change runs
+  as one CKAN transaction that rolls back on failure or cancel. "Update all" on the Updates tab.
+- **Share and import.** Share a setup as a short code or a `.vmpack` file; importing one makes a new copy with the same
+  mods at the same versions (or the newest one when a version left CKAN) and opens the review.
+- Fix: a KSP started from one copy no longer blocks changes to another copy whose game files are hard links of the
+  same install.
+- CLI: `vmpl catalog update|list|show|plan|apply|seed` for the mod manager.
+
 ## 0.2.2
 
 - Your downloads, game copy and settings now live in `%LOCALAPPDATA%\VmpLauncherData`, outside the program folder.
