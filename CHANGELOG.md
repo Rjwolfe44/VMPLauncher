@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.0-beta.3
+
+- When SpaceDock (the site mod pictures and long descriptions come from) is down, the Mods page says so instead of
+  just showing letter tiles. The launcher then checks it once a minute rather than for every row, and fills the
+  pictures in by itself as soon as SpaceDock answers again; no restart needed.
+
 ## 0.3.0-beta.2
 
 - Mod pictures load much faster. SpaceDock only serves full-size pictures (about 1 MB each), so each one is now
