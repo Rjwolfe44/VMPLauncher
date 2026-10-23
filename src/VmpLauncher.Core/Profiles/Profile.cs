@@ -2,17 +2,34 @@ using VmpLauncher.Core.Serialization;
 
 namespace VmpLauncher.Core.Profiles;
 
+/// <summary>What a profile (shown to players as a "setup") is for.</summary>
+public static class SetupKinds
+{
+    /// <summary>Locked to a signed pack: installs, updates and repairs come from the pack only.</summary>
+    public const string Pack = "pack";
+    /// <summary>A launcher-made copy of KSP where the player picks any mods.</summary>
+    public const string Custom = "custom";
+    /// <summary>A KSP folder the player already had (Steam, a CKAN instance); the launcher never deletes it.</summary>
+    public const string Existing = "existing";
+}
+
 /// <summary>profile.json: identity and seed information of a managed KSP profile.</summary>
 public sealed record ProfileManifest
 {
     public required string Id { get; init; }
     public required string Name { get; init; }
     public string? PackId { get; init; }
+    /// <summary><see cref="SetupKinds"/>; profiles from before 0.3 have none and are packs when they name one.</summary>
+    public string? Kind { get; init; }
+    /// <summary>The game folder when it is not the profile's own <c>game</c> folder (existing installs).</summary>
+    public string? GameDir { get; init; }
     public string? ChannelUrl { get; init; }
     public required SeedInfo Seed { get; init; }
     /// <summary>Optional override for the shared download cache (e.g. an existing CKAN cache).</summary>
     public string? CacheDir { get; init; }
     public DateTimeOffset CreatedUtc { get; init; } = DateTimeOffset.UtcNow;
+
+    public string EffectiveKind => Kind ?? (PackId is null ? SetupKinds.Custom : SetupKinds.Pack);
 }
 
 public sealed record SeedInfo
@@ -35,9 +52,12 @@ public sealed class ProfilePaths
         Root = Path.GetFullPath(profileDir);
     }
 
+    private string? _gameDir;
+
     public string Root { get; }
     public string ManifestFile => Path.Combine(Root, "profile.json");
-    public string GameDir => Path.Combine(Root, "game");
+    /// <summary>The profile's own <c>game</c> folder, or the existing install its manifest points at.</summary>
+    public string GameDir => _gameDir ??= ExternalGameDir() ?? Path.Combine(Root, "game");
     public string GameDataDir => Path.Combine(GameDir, "GameData");
     public string CkanDir => Path.Combine(GameDir, "CKAN");
     public string StateDir => Path.Combine(Root, "state");
@@ -61,7 +81,24 @@ public sealed class ProfilePaths
     }
 
     public ProfileManifest ReadManifest() => LauncherJson.ReadFile<ProfileManifest>(ManifestFile);
-    public void WriteManifest(ProfileManifest m) => LauncherJson.WriteFile(ManifestFile, m);
+
+    public void WriteManifest(ProfileManifest m)
+    {
+        LauncherJson.WriteFile(ManifestFile, m);
+        _gameDir = m.GameDir is { Length: > 0 } g ? Path.GetFullPath(g) : null;
+    }
+
+    private string? ExternalGameDir()
+    {
+        try
+        {
+            return Exists && ReadManifest().GameDir is { Length: > 0 } g ? Path.GetFullPath(g) : null;
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or System.Text.Json.JsonException)
+        {
+            return null;
+        }
+    }
     public bool Exists => File.Exists(ManifestFile);
 }
 

@@ -17,7 +17,12 @@ public static class GameProcessGuard
         {
             foreach (var pid in RestartManager.ProcessesUsing(exe))
             {
-                pids.Add(pid);
+                // Seeded copies hard-link KSP_x64.exe, so Restart Manager also reports a KSP started from another copy.
+                // Count it only when it really runs from this folder (or when its path cannot be read).
+                if (ProcessPath(pid) is not { } path || ProfilePathValidator.IsInside(path, gameDir))
+                {
+                    pids.Add(pid);
+                }
             }
         }
         foreach (var name in new[] { "KSP_x64", "KSP" })
@@ -43,6 +48,19 @@ public static class GameProcessGuard
             }
         }
         return pids.ToList();
+    }
+
+    private static string? ProcessPath(int pid)
+    {
+        try
+        {
+            using var p = Process.GetProcessById(pid);
+            return p.MainModule?.FileName;
+        }
+        catch (Exception)
+        {
+            return null; // gone, or access denied for an elevated process
+        }
     }
 
     public static void ThrowIfRunning(string gameDir)
