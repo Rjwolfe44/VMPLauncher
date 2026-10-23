@@ -110,6 +110,22 @@
                         <ui:Button Grid.Column="1" Content="Clean up old downloads" Command="{Binding CleanupCacheCommand}" Icon="{ui:SymbolIcon Broom24}" Margin="12,0,0,0"
                                    IsEnabled="{Binding CanCleanup}" ToolTip="Deletes downloads that neither the current pack nor your install uses. They download again if ever needed." />
                     </Grid>
+                    <Border Margin="0,14,0,0" Padding="16,12" CornerRadius="10" Background="{StaticResource Space.Bg.ElevatedBrush}"
+                            Visibility="{Binding HasCkanCache, Converter={StaticResource BoolToVisibility}}">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource Space.Style.Body}" FontWeight="SemiBold" Text="Your CKAN download cache" />
+                            <TextBlock Style="{StaticResource Space.Style.Mono}" FontSize="12" Text="{Binding CkanCacheDir}" Margin="0,2,0,0" />
+                            <TextBlock Style="{StaticResource Space.Style.Caption}" Text="{Binding CkanCacheInfo}" Margin="0,6,0,0" />
+                            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                <ui:Button Content="Transfer the pack's mods" Command="{Binding TransferCkanCommand}" Icon="{ui:SymbolIcon ArrowSwap24}"
+                                           ToolTip="Links every mod this pack needs from CKAN's cache into the launcher's (no download, no extra space)." />
+                                <ui:Button Content="Clear CKAN's cache…" Command="{Binding ClearCkanCommand}" Icon="{ui:SymbolIcon Delete24}" Margin="8,0,0,0" IsEnabled="{Binding CanClearCkan}"
+                                           ToolTip="Transfers the pack's mods first, then deletes CKAN's cached downloads." />
+                            </StackPanel>
+                            <TextBlock Style="{StaticResource Space.Style.Caption}" Foreground="{StaticResource Space.Text.PrimaryBrush}" Text="{Binding CkanResult}" Margin="0,8,0,0"
+                                       Visibility="{Binding CkanResult, Converter={StaticResource NullToVisibility}}" />
+                        </StackPanel>
+                    </Border>
                     <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
                         <ui:Button Content="Open data folder" Command="{Binding OpenDataCommand}" Icon="{ui:SymbolIcon FolderOpen24}" />
                         <ui:Button Content="Open logs" Command="{Binding OpenLogsCommand}" Icon="{ui:SymbolIcon DocumentText24}" Margin="8,0,0,0" />

@@ -370,6 +370,50 @@ public sealed class LauncherService : IDisposable
         }, ct);
     }
 
+    /// <summary>Normal CKAN download caches found on this PC (not the launcher's own).</summary>
+    public IReadOnlyList<string> ForeignCkanCaches() => CkanCacheImporter.DiscoverCaches(CacheDir);
+
+    /// <summary>Hard-links every archive the current pack needs from the other CKAN caches into the launcher's cache.</summary>
+    public async Task<CkanCacheImporter.Result> TransferFromCkanAsync(CancellationToken outer)
+    {
+        var current = CurrentPack?.Lock ?? throw new LauncherException(ErrorCode.InvalidPack, "Load the pack first (Home), so the launcher knows which mods to take over.", RecoveryHint.Retry);
+        if (!OwnsCache)
+        {
+            throw new LauncherException(ErrorCode.InvalidPack, "The launcher already uses that folder as its download cache.", RecoveryHint.None);
+        }
+        return await _runner.RunAsync(OperationKind.Cleanup, "Taking over mods from your CKAN cache", (progress, ct) => Task.Run(() =>
+        {
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, outer);
+            var sink = new Progress<(int Done, int Total, string Name)>(p =>
+                progress.Report(new VmpLauncher.Ckan.Users.CkanProgress($"Checking your CKAN download cache ({p.Done}/{p.Total})", p.Total > 0 ? p.Done * 100 / p.Total : -1, null)));
+            var lockDocs = InstalledLock() is { } inst ? new[] { current, inst } : new[] { current };
+            CkanCacheImporter.Result? last = null;
+            foreach (var lk in lockDocs)
+            {
+                last = CkanCacheImporter.Import(lk, CacheDir, ForeignCkanCaches(), sink, linked.Token);
+            }
+            return last!;
+        }, ct)).ConfigureAwait(false);
+    }
+
+    /// <summary>Transfers the pack's archives, then deletes the other CKAN cache's files.</summary>
+    public async Task<(int Files, long FreedBytes)> ClearCkanCacheAsync(string dir, CancellationToken outer)
+    {
+        if (CkanCacheImporter.CkanClientRunning())
+        {
+            throw new LauncherException(ErrorCode.InvalidPack, "CKAN is running. Close it first, then clear its cache.", RecoveryHint.Retry);
+        }
+        await TransferFromCkanAsync(outer).ConfigureAwait(false);
+        return await _runner.RunAsync(OperationKind.Cleanup, "Clearing your CKAN download cache", (progress, ct) => Task.Run(() =>
+        {
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, outer);
+            progress.Report(new VmpLauncher.Ckan.Users.CkanProgress($"Removing CKAN's cached downloads in {dir}…", -1, null));
+            var r = CkanCacheImporter.Clear(dir, linked.Token);
+            _log.LogInformation("Cleared CKAN cache {Dir}: {Files} files, {Bytes} bytes freed", dir, r.Files, r.FreedBytes);
+            return r;
+        }, ct)).ConfigureAwait(false);
+    }
+
     /// <summary>True when downloads live in the launcher's own cache (cleanup is never offered for a shared CKAN cache).</summary>
     public bool OwnsCache => string.Equals(Path.GetFullPath(CacheDir).TrimEnd('\\'), Path.GetFullPath(_paths.CacheDir).TrimEnd('\\'), StringComparison.OrdinalIgnoreCase);
 

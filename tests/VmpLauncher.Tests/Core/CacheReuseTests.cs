@@ -72,6 +72,29 @@ public sealed class CacheReuseTests : IDisposable
     }
 
     [Fact]
+    public void Clearing_a_ckan_cache_after_transfer_keeps_the_launchers_copies_and_counts_only_real_savings()
+    {
+        var needed = Encoding.UTF8.GetBytes("needed archive");
+        var other = Encoding.UTF8.GetBytes("only CKAN used this one");
+        const string url = "https://example.test/Needed.zip";
+        File.WriteAllBytes(Path.Combine(_ckan, $"{Prefix(url)}-Needed.zip"), needed);
+        File.WriteAllBytes(Path.Combine(_ckan, "ABCDEF01-Other.zip"), other);
+        File.WriteAllText(Path.Combine(_ckan, "not-a-cache-entry.txt"), "keep me");
+        CkanCacheImporter.Import(Lock(Module("Needed", url, needed)), _ours, new[] { _ckan }, null, CancellationToken.None);
+
+        var info = CkanCacheImporter.Describe(_ckan);
+        Assert.Equal(2, info.Files);
+        Assert.Equal(1, info.SharedFiles);
+        Assert.Equal(other.Length, info.FreeableBytes);
+
+        var (files, freed) = CkanCacheImporter.Clear(_ckan, CancellationToken.None);
+        Assert.Equal(2, files);
+        Assert.Equal(other.Length, freed);
+        Assert.Equal(needed, File.ReadAllBytes(Path.Combine(_ours, $"{Prefix(url)}-Needed.zip")));
+        Assert.True(File.Exists(Path.Combine(_ckan, "not-a-cache-entry.txt")), "only CKAN cache entries are deleted");
+    }
+
+    [Fact]
     public void Cleanup_keeps_what_current_and_installed_locks_need_including_private_placeholders()
     {
         var a = Encoding.UTF8.GetBytes("A");

@@ -10,6 +10,13 @@ public partial class SettingsPage : UserControl
         ViewModel = viewModel;
         DataContext = viewModel;
         InitializeComponent();
+        Loaded += async (_, _) =>
+        {
+            if (string.IsNullOrEmpty(ViewModel.CacheSize))
+            {
+                await ViewModel.MeasureCacheCommand.ExecuteAsync(null);
+            }
+        };
     }
 
     public SettingsViewModel ViewModel { get; }

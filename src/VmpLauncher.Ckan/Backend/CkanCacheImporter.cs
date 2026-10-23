@@ -128,6 +128,101 @@ public static class CkanCacheImporter
         return new Result(imported, bytes, linked, copied, rejected, sourceCaches);
     }
 
+    /// <summary>Size of another CKAN cache, and how much of it is already shared (hard-linked) with the launcher.</summary>
+    public sealed record ForeignCacheInfo(string Dir, int Files, long Bytes, int SharedFiles, long SharedBytes)
+    {
+        /// <summary>What clearing it would actually free: files no other folder (the launcher's cache) links to.</summary>
+        public long FreeableBytes => Bytes - SharedBytes;
+    }
+
+    public static ForeignCacheInfo Describe(string dir)
+    {
+        int files = 0, shared = 0;
+        long bytes = 0, sharedBytes = 0;
+        foreach (var f in CacheEntries(dir))
+        {
+            files++;
+            bytes += f.Length;
+            if (LinkCount(f.FullName) > 1)
+            {
+                shared++;
+                sharedBytes += f.Length;
+            }
+        }
+        return new ForeignCacheInfo(dir, files, bytes, shared, sharedBytes);
+    }
+
+    /// <summary>
+    /// Deletes another CKAN client's cached archives (only files named like CKAN cache entries; folders and CKAN's own
+    /// state are left alone). Callers transfer the pack's archives first, so the launcher keeps every file it needs:
+    /// for those, deleting CKAN's name frees nothing and loses nothing. Returns files removed and bytes actually freed.
+    /// </summary>
+    public static (int Files, long FreedBytes) Clear(string dir, CancellationToken ct)
+    {
+        int files = 0;
+        long freed = 0;
+        foreach (var f in CacheEntries(dir).ToList())
+        {
+            ct.ThrowIfCancellationRequested();
+            try
+            {
+                var lastLink = LinkCount(f.FullName) <= 1;
+                var size = f.Length;
+                f.Delete();
+                files++;
+                if (lastLink)
+                {
+                    freed += size;
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // in use: leave it
+            }
+        }
+        return (files, freed);
+    }
+
+    /// <summary>True while a normal CKAN client is running (its cache must not change under it).</summary>
+    public static bool CkanClientRunning()
+    {
+        foreach (var name in new[] { "CKAN", "ckan" })
+        {
+            var procs = System.Diagnostics.Process.GetProcessesByName(name);
+            var any = procs.Length > 0;
+            foreach (var p in procs)
+            {
+                p.Dispose();
+            }
+            if (any)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static IEnumerable<FileInfo> CacheEntries(string dir)
+        => Directory.Exists(dir)
+            ? new DirectoryInfo(dir).EnumerateFiles().Where(f => f.Name.Length > 9 && f.Name[8] == '-' && f.Name[..8].All(Uri.IsHexDigit))
+            : Enumerable.Empty<FileInfo>();
+
+    private static uint LinkCount(string path)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return 1;
+        }
+        try
+        {
+            return NativeFiles.GetFileIdentity(path).Links;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return 1;
+        }
+    }
+
     private static IEnumerable<string> Prefixes(LockedModule m)
     {
         var urls = new List<string>(m.Artifact?.Urls ?? Array.Empty<string>());

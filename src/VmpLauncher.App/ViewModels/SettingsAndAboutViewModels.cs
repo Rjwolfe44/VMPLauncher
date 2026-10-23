@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.Input;
 using VmpLauncher.App.Services;
 using VmpLauncher.Core;
 using VmpLauncher.Core.Diagnostics;
+using Wpf.Ui.Extensions;
 
 namespace VmpLauncher.App.ViewModels;
 
@@ -22,13 +23,17 @@ public partial class SettingsViewModel : ObservableObject
     private readonly LauncherPaths _paths;
     private readonly LauncherService _launcher;
     private readonly IAppNavigator _navigation;
+    private readonly HostToolsService _host;
+    private readonly Wpf.Ui.IContentDialogService _dialogs;
 
-    public SettingsViewModel(AppSettingsStore settings, LauncherPaths paths, LauncherService launcher, IAppNavigator navigation)
+    public SettingsViewModel(AppSettingsStore settings, LauncherPaths paths, LauncherService launcher, IAppNavigator navigation, HostToolsService host, Wpf.Ui.IContentDialogService dialogs)
     {
         _settings = settings;
         _paths = paths;
         _launcher = launcher;
         _navigation = navigation;
+        _host = host;
+        _dialogs = dialogs;
         var s = settings.Current;
         _sourceKspPath = s.SourceKspPath ?? "(not chosen)";
         _profileRoot = launcher.ProfilePaths.Root;
@@ -65,6 +70,11 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private string _cacheSize = string.Empty;
     [ObservableProperty] private string _cleanupInfo = string.Empty;
     [ObservableProperty] private bool _canCleanup;
+    [ObservableProperty] private bool _hasCkanCache;
+    [ObservableProperty] private string _ckanCacheDir = string.Empty;
+    [ObservableProperty] private string _ckanCacheInfo = string.Empty;
+    [ObservableProperty] private bool _canClearCkan;
+    [ObservableProperty] private string _ckanResult = string.Empty;
     [ObservableProperty] private string _inviteText = string.Empty;
     [ObservableProperty] private string _inviteResult = string.Empty;
     [ObservableProperty] private string _inviteResultKind = "neutral";
@@ -180,6 +190,7 @@ public partial class SettingsViewModel : ObservableObject
             }
         });
         CacheSize = size < 0 ? "could not measure" : Format.Bytes(size);
+        await DescribeCkanCacheAsync();
         if (!_launcher.OwnsCache)
         {
             CleanupInfo = "This folder is shared with another program (e.g. your own CKAN), so the launcher leaves it alone.";
@@ -195,6 +206,79 @@ public partial class SettingsViewModel : ObservableObject
         CleanupInfo = plan.Remove.Count == 0
             ? "Nothing to clean up: every download is still used by the pack."
             : $"{Format.Bytes(plan.RemoveBytes)} in {plan.Remove.Count} old download(s) is no longer used by the pack or your install.";
+    }
+
+    /// <summary>Finds a normal CKAN client's download cache and says how much of it the launcher already shares.</summary>
+    private async Task DescribeCkanCacheAsync()
+    {
+        var found = _launcher.OwnsCache ? _launcher.ForeignCkanCaches() : Array.Empty<string>();
+        var dir = found.Count > 0 ? found[0] : null;
+        HasCkanCache = dir is not null;
+        if (dir is null)
+        {
+            return;
+        }
+        CkanCacheDir = dir;
+        var info = await Task.Run(() => VmpLauncher.Ckan.Backend.CkanCacheImporter.Describe(dir));
+        CkanCacheInfo = $"{Format.Bytes(info.Bytes)} in {info.Files} archive(s). {Format.Bytes(info.SharedBytes)} of it is shared with the launcher (stored once); clearing it would free {Format.Bytes(info.FreeableBytes)}.";
+        var hostUses = _host.IsHost && _host.Config is { } c && string.Equals(Path.GetFullPath(c.HostCacheDir).TrimEnd('\\'), Path.GetFullPath(dir).TrimEnd('\\'), StringComparison.OrdinalIgnoreCase);
+        CanClearCkan = info.Files > 0 && !hostUses;
+        if (hostUses)
+        {
+            CkanCacheInfo += " Host tools publishes from this cache, so the launcher will not clear it on this PC.";
+        }
+    }
+
+    [RelayCommand]
+    private async Task TransferCkanAsync(CancellationToken ct)
+    {
+        try
+        {
+            CkanResult = "Taking over the pack's mods…";
+            var r = await _launcher.TransferFromCkanAsync(ct);
+            CkanResult = r.Imported == 0 ? "The launcher already has every mod it needs from that cache." : $"Took over {r.Imported} mod archive(s), {Format.Bytes(r.Bytes)}, without downloading or copying them.";
+        }
+        catch (LauncherException ex)
+        {
+            CkanResult = ex.Message;
+        }
+        catch (OperationCanceledException)
+        {
+            CkanResult = "Cancelled.";
+        }
+        await MeasureCacheCommand.ExecuteAsync(null);
+    }
+
+    [RelayCommand]
+    private async Task ClearCkanAsync(CancellationToken ct)
+    {
+        var answer = await _dialogs.ShowSimpleDialogAsync(new Wpf.Ui.SimpleContentDialogCreateOptions
+        {
+            Title = "Clear your CKAN download cache?",
+            Content = $"The launcher first takes over every mod this pack needs, then deletes CKAN's cached downloads in {CkanCacheDir}. "
+                    + "Your CKAN itself and your KSP installs are not touched, but CKAN will download mods again if you install them there.",
+            PrimaryButtonText = "Clear it",
+            CloseButtonText = "Keep it",
+        }, ct);
+        if (answer != Wpf.Ui.Controls.ContentDialogResult.Primary)
+        {
+            return;
+        }
+        try
+        {
+            CkanResult = "Clearing…";
+            var (files, freed) = await _launcher.ClearCkanCacheAsync(CkanCacheDir, ct);
+            CkanResult = $"Removed {files} file(s) from CKAN's cache and freed {Format.Bytes(freed)}. The pack's mods stay in the launcher's cache.";
+        }
+        catch (LauncherException ex)
+        {
+            CkanResult = ex.Message;
+        }
+        catch (OperationCanceledException)
+        {
+            CkanResult = "Cancelled.";
+        }
+        await MeasureCacheCommand.ExecuteAsync(null);
     }
 
     [RelayCommand]
