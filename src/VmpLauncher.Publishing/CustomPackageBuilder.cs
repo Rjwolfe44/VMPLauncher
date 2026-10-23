@@ -87,10 +87,11 @@ public static class CustomPackageBuilder
               "download_hash": { "sha1": "{{sha1.ToUpperInvariant()}}", "sha256": "{{sha256.ToUpperInvariant()}}" },
               "download_content_type": "application/zip",
               "install_size": {{installSize}},
-              "release_date": "{{DateTime.UtcNow:yyyy-MM-ddTHH:mm:ssZ}}",
               "install": [ { "find": "{{rootName}}", "install_to": "{{root[..root.LastIndexOf('/')]}}" } ]{{rel("conflicts", src.Conflicts)}}{{provides}}
             }
             """;
+        // No release_date: the metadata must be a pure function of the package content so that an
+        // unchanged custom package is "unchanged" in LockDiff across exports (release_date is optional in CKAN).
         var module = CkanModule.FromJson(json);
         var artifact = new ArtifactRef
         {

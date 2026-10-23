@@ -36,7 +36,7 @@ public sealed record LockDiff
             {
                 added.Add(n);
             }
-            else if (o.Version != n.Version || !Sha256Util.HexEquals(o.MetadataSha256, n.MetadataSha256) || !Sha256Util.HexEquals(o.Artifact?.Sha256, n.Artifact?.Sha256))
+            else if (o.Version != n.Version || !Sha256Util.HexEquals(o.MetadataSha256, n.MetadataSha256) || !SameArtifact(o.Artifact?.Sha256, n.Artifact?.Sha256))
             {
                 changed.Add((o, n));
             }
@@ -63,4 +63,8 @@ public sealed record LockDiff
 
     public string Summary()
         => $"{Added.Count} added, {Changed.Count} changed, {Removed.Count} removed, {Unchanged.Count} unchanged; overrides +{OverridesAdded.Count} ~{OverridesChanged.Count} -{OverridesRemoved.Count}";
+
+    /// <summary>Artifact hashes match; two modules without an artifact (metapackages, DLC) count as the same.</summary>
+    private static bool SameArtifact(string? a, string? b)
+        => a is null ? b is null : Sha256Util.HexEquals(a, b);
 }

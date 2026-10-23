@@ -3,7 +3,7 @@
   "id": "vmp-train-career",
   "name": "VMP Train Career",
   "author": "Rjwolfe44",
-  "version": "2026.10.22.1",
+  "version": "2026.10.22.2",
   "description": "Career multiplayer world on trainpc: 180 CKAN mods, the VMP client and ApexGuidance, pinned to the exact versions the server expects.",
   "game": {
     "kspVersion": "1.12.5",
