@@ -63,6 +63,8 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private bool _betaChannel;
     [ObservableProperty] private int _textScalePercent = 100;
     [ObservableProperty] private string _cacheSize = string.Empty;
+    [ObservableProperty] private string _cleanupInfo = string.Empty;
+    [ObservableProperty] private bool _canCleanup;
     [ObservableProperty] private string _inviteText = string.Empty;
     [ObservableProperty] private string _inviteResult = string.Empty;
     [ObservableProperty] private string _inviteResultKind = "neutral";
@@ -165,6 +167,7 @@ public partial class SettingsViewModel : ObservableObject
     {
         var dir = CacheDir;
         CacheSize = "measuring…";
+        CanCleanup = false;
         var size = await Task.Run(() =>
         {
             try
@@ -177,6 +180,41 @@ public partial class SettingsViewModel : ObservableObject
             }
         });
         CacheSize = size < 0 ? "could not measure" : Format.Bytes(size);
+        if (!_launcher.OwnsCache)
+        {
+            CleanupInfo = "This folder is shared with another program (e.g. your own CKAN), so the launcher leaves it alone.";
+            return;
+        }
+        var plan = await _launcher.AnalyzeCacheAsync();
+        if (plan is null)
+        {
+            CleanupInfo = "Open Home once so the launcher knows which downloads the pack still needs.";
+            return;
+        }
+        CanCleanup = plan.Remove.Count > 0;
+        CleanupInfo = plan.Remove.Count == 0
+            ? "Nothing to clean up: every download is still used by the pack."
+            : $"{Format.Bytes(plan.RemoveBytes)} in {plan.Remove.Count} old download(s) is no longer used by the pack or your install.";
+    }
+
+    [RelayCommand]
+    private async Task CleanupCacheAsync(CancellationToken ct)
+    {
+        CanCleanup = false;
+        try
+        {
+            var (files, bytes) = await _launcher.CleanCacheAsync(ct);
+            CleanupInfo = $"Freed {Format.Bytes(bytes)} ({files} file(s)).";
+        }
+        catch (OperationCanceledException)
+        {
+            CleanupInfo = "Cleanup cancelled.";
+        }
+        catch (LauncherException ex)
+        {
+            CleanupInfo = ex.Message;
+        }
+        await MeasureCacheCommand.ExecuteAsync(null);
     }
 }
 

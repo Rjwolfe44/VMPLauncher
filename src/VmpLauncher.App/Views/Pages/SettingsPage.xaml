@@ -88,7 +88,7 @@
                     <TextBlock Style="{StaticResource Space.Style.Mono}" Text="{Binding SourceKspPath}" Margin="0,2,0,12" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip="{Binding SourceKspPath}" />
                     <TextBlock Style="{StaticResource Space.Style.Caption}" Text="Modded copy (profile)" />
                     <TextBlock Style="{StaticResource Space.Style.Mono}" Text="{Binding ProfileRoot}" Margin="0,2,0,12" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip="{Binding ProfileRoot}" />
-                    <TextBlock Style="{StaticResource Space.Style.Caption}" Text="Download cache (an existing CKAN cache can be reused)" />
+                    <TextBlock Style="{StaticResource Space.Style.Caption}" Text="Download cache. Mods you already have in a normal CKAN download cache are reused automatically (linked, not downloaded or copied again)." />
                     <Grid Margin="0,2,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
@@ -100,6 +100,15 @@
                             <ui:Button Content="Measure" Command="{Binding MeasureCacheCommand}" Margin="0,0,8,0" />
                             <ui:Button Content="Change…" Command="{Binding BrowseCacheCommand}" />
                         </StackPanel>
+                    </Grid>
+                    <Grid Margin="0,10,0,0" Visibility="{Binding CleanupInfo, Converter={StaticResource NullToVisibility}}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource Space.Style.Caption}" Foreground="{StaticResource Space.Text.PrimaryBrush}" Text="{Binding CleanupInfo}" VerticalAlignment="Center" />
+                        <ui:Button Grid.Column="1" Content="Clean up old downloads" Command="{Binding CleanupCacheCommand}" Icon="{ui:SymbolIcon Broom24}" Margin="12,0,0,0"
+                                   IsEnabled="{Binding CanCleanup}" ToolTip="Deletes downloads that neither the current pack nor your install uses. They download again if ever needed." />
                     </Grid>
                     <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
                         <ui:Button Content="Open data folder" Command="{Binding OpenDataCommand}" Icon="{ui:SymbolIcon FolderOpen24}" />

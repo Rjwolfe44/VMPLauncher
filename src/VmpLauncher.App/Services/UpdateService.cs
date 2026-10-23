@@ -6,9 +6,10 @@ using Velopack.Sources;
 namespace VmpLauncher.App.Services;
 
 /// <summary>
-/// Self-update through Velopack + GitHub Releases. Checks shortly after launch and every 6 hours, downloads in the
-/// background, and only ever applies when the user clicks "Restart to update" while no operation is running.
-/// Development builds (not installed by Velopack) report "updates off".
+/// Self-update through Velopack + GitHub Releases. Checks shortly after launch and every 6 hours and downloads in the
+/// background. A downloaded update installs by itself when the launcher closes (and, as Velopack's fallback, on the
+/// next start), so nobody has to click anything; "Restart now" just does it immediately. Never while an install,
+/// update or repair is running. Development builds (not installed by Velopack) report "updates off".
 /// </summary>
 public sealed partial class UpdateService : ObservableObject, IDisposable
 {
@@ -52,7 +53,7 @@ public sealed partial class UpdateService : ObservableObject, IDisposable
                 _pendingAsset = pendingAsset;
                 AvailableVersion = pendingAsset.Version.ToString();
                 UpdateReady = true;
-                Status = $"Version {AvailableVersion} is downloaded. Restart to update.";
+                Status = $"Version {AvailableVersion} is downloaded and installs when you close the launcher.";
                 return;
             }
             if (_settings.Current.AutoCheckUpdates)
@@ -92,7 +93,7 @@ public sealed partial class UpdateService : ObservableObject, IDisposable
             await _manager.DownloadUpdatesAsync(info, p => Status = $"Downloading {AvailableVersion}… {p}%", _cts.Token).ConfigureAwait(false);
             _pending = info;
             UpdateReady = true;
-            Status = $"Version {AvailableVersion} is ready. Restart to update.";
+            Status = $"Version {AvailableVersion} is ready and installs when you close the launcher (or restart now).";
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -119,6 +120,34 @@ public sealed partial class UpdateService : ObservableObject, IDisposable
             return true;
         }
         return false;
+    }
+
+    /// <summary>
+    /// Called while the launcher exits: hands a downloaded update to Velopack's updater, which waits for this process
+    /// to end, installs silently, and does not relaunch. Skipped while an operation is running (the next start then
+    /// applies it, which Velopack does by default).
+    /// </summary>
+    public void ApplyOnExit()
+    {
+        try
+        {
+            if (_manager is null || IsDevelopmentBuild || _runner.IsBusy)
+            {
+                return;
+            }
+            var asset = _pending?.TargetFullRelease ?? _pendingAsset ?? _manager.UpdatePendingRestart;
+            if (asset is null)
+            {
+                return;
+            }
+            _log.LogInformation("Installing launcher {Version} on exit", asset.Version);
+            _manager.WaitExitThenApplyUpdates(asset, silent: true, restart: false);
+        }
+        catch (Exception ex)
+        {
+            // Never block closing; Velopack applies the update on the next start instead.
+            _log.LogWarning(ex, "Could not hand the update to the updater on exit");
+        }
     }
 
     public void Dispose()

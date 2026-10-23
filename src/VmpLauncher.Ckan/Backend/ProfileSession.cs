@@ -196,6 +196,17 @@ public sealed class ProfileSession : IDisposable
             return;
         }
         var downloader = new NetAsyncModulesDownloader(User, Cache, UserAgent, ct);
+        // Overall byte progress (percent, speed, time left) for the UI. The message only changes when a module finishes,
+        // so the activity log gets one line per archive rather than one per tick; the numbers travel in Rate.
+        var finished = 0;
+        var totalBytes = modules.Sum(m => m.download_size);
+        var message = $"Downloading {modules.Count} mod archive(s), {HumanBytes(totalBytes)}";
+        downloader.OneComplete += m =>
+        {
+            var n = Interlocked.Increment(ref finished);
+            message = $"Downloading mods: {n} of {modules.Count} done (last: {m.name})";
+        };
+        downloader.OverallDownloadProgress += rate => progress?.Report(new CkanProgress(message, rate.Percent, rate));
         try
         {
             downloader.DownloadModules(modules);
@@ -222,6 +233,19 @@ public sealed class ProfileSession : IDisposable
             }
         }
         VerifiedIndex.Save();
+    }
+
+    private static string HumanBytes(long bytes)
+    {
+        string[] units = { "B", "KB", "MB", "GB", "TB" };
+        double v = bytes;
+        var i = 0;
+        while (v >= 1000 && i < units.Length - 1)
+        {
+            v /= 1024;
+            i++;
+        }
+        return i == 0 ? $"{bytes} B" : $"{v:0.#} {units[i]}";
     }
 
     /// <summary>Stores a privately provided archive after proving it matches the lock.</summary>

@@ -147,6 +147,16 @@ internal static class ProfileCommands
                 .ToDictionary(a => a[0], a => Path.GetFullPath(a[1]), StringComparer.Ordinal);
             var cacheDir = parse.GetValue(cache) ?? pp.ReadManifest().CacheDir ?? paths.CacheDir;
             Directory.CreateDirectory(cacheDir);
+            if (!parse.GetValue(offline))
+            {
+                // Same as the launcher: reuse matching archives from a normal CKAN client's cache before downloading.
+                var sources = CkanCacheImporter.DiscoverCaches(cacheDir);
+                var imported = CkanCacheImporter.Import(lockDoc, cacheDir, sources, null, CancellationToken.None);
+                if (imported.Imported > 0 || imported.Rejected > 0)
+                {
+                    Console.WriteLine($"Reused {imported.Imported} archive(s) ({imported.Bytes:N0} bytes; {imported.Linked} linked, {imported.Copied} copied, {imported.Rejected} rejected) from {string.Join(", ", sources)}.");
+                }
+            }
             using var worker = new CkanWorker();
             try
             {

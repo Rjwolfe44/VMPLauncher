@@ -34,6 +34,12 @@ public partial class App : Application
         Services.GetRequiredService<UpdateService>().Start();
     }
 
+    protected override void OnExit(ExitEventArgs e)
+    {
+        Services.GetRequiredService<UpdateService>().ApplyOnExit();
+        base.OnExit(e);
+    }
+
     /// <summary>
     /// Shikigami purple as the Fluent accent. WPF-UI derives lighter shades for dark themes, which turned #B69CFF into
     /// near-white buttons, so every accent shade is pinned explicitly and the brushes are re-pointed at the palette.

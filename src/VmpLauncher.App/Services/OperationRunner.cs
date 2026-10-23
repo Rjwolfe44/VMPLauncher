@@ -14,6 +14,7 @@ public enum OperationKind
     Recover,
     Capture,
     Publish,
+    Cleanup,
 }
 
 /// <summary>Latest known state of the running operation; sampled by the UI at 10 Hz, never pushed per event.</summary>
@@ -193,7 +194,15 @@ public sealed partial class OperationRunner : ObservableObject
             // but once a phase reached 100% the next silent step (snapshot, apply, verify) shows as indeterminate
             // instead of a bar stuck at 100%.
             int? percent = value.Percent >= 0 ? value.Percent : owner.Snapshot is { Percent: >= 100 } ? -1 : null;
-            owner.Report(value.Message, percent, rate?.BytesPerSecond, rate?.TimeLeftString);
+            // Speed and time left only while bytes are actually flowing (CKAN reports an endless time at 0 B/s).
+            var flowing = rate is { BytesPerSecond: > 0 };
+            if (rate is null && value.Percent >= 0)
+            {
+                // A new phase with its own progress (install, verify): the download speed no longer applies.
+                owner.Report(value.Message, percent, 0, string.Empty);
+                return;
+            }
+            owner.Report(value.Message, percent, flowing ? rate!.BytesPerSecond : null, flowing ? rate!.TimeLeftString : null);
         }
     }
 }

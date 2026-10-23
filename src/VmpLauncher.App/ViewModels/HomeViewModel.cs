@@ -33,6 +33,7 @@ public partial class HomeViewModel : ObservableObject
     private readonly ILogger<HomeViewModel> _log;
     private readonly DispatcherTimer _timer;
     private DateTimeOffset _lastRefresh = DateTimeOffset.MinValue;
+    private OperationKind? _lastKind;
     private bool _autoUpdateTried;
     private ProfileState _state;
 
@@ -267,19 +268,32 @@ public partial class HomeViewModel : ObservableObject
         if (_runner.IsBusy)
         {
             PrimaryEnabled = false;
-            (StateBadge, StateKind) = ("Working", "checking");
+            (StateBadge, StateKind) = _runner.Snapshot?.Kind switch
+            {
+                OperationKind.Publish => ("Host tools busy", "checking"),
+                OperationKind.Cleanup => ("Cleaning up", "checking"),
+                _ => ("Working", "checking"),
+            };
+            if (_runner.Snapshot?.Kind == OperationKind.Publish)
+            {
+                StateHeadline = "Host tools is publishing or checking the pack. Install and Play are back when it finishes.";
+            }
         }
     }
 
     private void SampleOperation()
     {
         var s = _runner.Snapshot;
-        if (IsOperationRunning != (s is not null))
+        // Host publishing has its own page and log; the Home hero only shows the player's own installs and updates,
+        // so its Cancel button can never stop a publish by accident.
+        var shown = s is not null && s.Kind is not (OperationKind.Publish or OperationKind.Cleanup);
+        if (IsOperationRunning != shown || (s is null) != (_lastKind is null) || s?.Kind != _lastKind)
         {
-            IsOperationRunning = s is not null;
+            _lastKind = s?.Kind;
+            IsOperationRunning = shown;
             UpdateState();
         }
-        if (s is null)
+        if (!shown || s is null)
         {
             return;
         }

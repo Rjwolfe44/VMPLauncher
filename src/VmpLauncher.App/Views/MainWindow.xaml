@@ -70,10 +70,10 @@
                     <Button Style="{StaticResource Space.Button.Link}" Margin="14,0,14,8" HorizontalAlignment="Stretch"
                             Command="{Binding RestartToUpdateCommand}"
                             Visibility="{Binding Updates.UpdateReady, Converter={StaticResource BoolToVisibility}}"
-                            ToolTip="A new launcher version is downloaded. Restart to use it.">
+                            ToolTip="A new launcher version is downloaded. It installs by itself when you close the launcher; click to restart into it now.">
                         <StackPanel Orientation="Horizontal">
                             <ui:SymbolIcon Symbol="ArrowCircleUp24" Filled="True" Margin="0,0,8,0" />
-                            <TextBlock Text="{Binding Updates.AvailableVersion, StringFormat=Restart for launcher {0}}" />
+                            <TextBlock Text="{Binding Updates.AvailableVersion, StringFormat=Launcher {0} ready: restart now}" />
                         </StackPanel>
                     </Button>
 

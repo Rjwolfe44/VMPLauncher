@@ -112,12 +112,18 @@ public partial class MainWindowViewModel : ObservableObject
         {
             ActivityVisible = false;
             activity.Badge = null;
+            FooterItems.First(n => n.Page == AppPage.Host).Badge = null;
             return;
         }
         var pct = Math.Clamp(s.Percent, 0, 100);
-        activity.Badge = s.Percent > 0 ? $"{pct}%" : "•";
-        // The Home and Activity pages show progress themselves; the strip covers every other page.
-        ActivityVisible = _navigator.Current is not (AppPage.Activity or AppPage.Home);
+        var isPublish = s.Kind == OperationKind.Publish;
+        activity.Badge = isPublish ? null : s.Percent > 0 ? $"{pct}%" : "•";
+        var host = FooterItems.First(n => n.Page == AppPage.Host);
+        host.Badge = isPublish ? "•" : null;
+        // Home and Activity show installs themselves and Host tools shows publishing; the strip covers the rest.
+        ActivityVisible = isPublish
+            ? _navigator.Current is not (AppPage.Host or AppPage.Home)
+            : _navigator.Current is not (AppPage.Activity or AppPage.Home);
         ActivityTitle = s.Title;
         ActivityPercent = pct;
         ActivityIndeterminate = s.Percent <= 0;

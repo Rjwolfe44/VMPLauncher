@@ -26,9 +26,9 @@
                     <TextBlock Style="{StaticResource Space.Style.Body}" Text="{Binding Updates.Status}" />
                     <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
                         <ui:Button Content="Check now" Command="{Binding CheckUpdatesCommand}" Icon="{ui:SymbolIcon ArrowSync24}" Visibility="{Binding Updates.IsDevelopmentBuild, Converter={StaticResource InvertedBoolToVisibility}}" />
-                        <ui:Button Content="Restart to update" Command="{Binding RestartToUpdateCommand}" Appearance="Primary" Margin="8,0,0,0" Visibility="{Binding Updates.UpdateReady, Converter={StaticResource BoolToVisibility}}" />
+                        <ui:Button Content="Restart now" Command="{Binding RestartToUpdateCommand}" Appearance="Primary" Margin="8,0,0,0" Visibility="{Binding Updates.UpdateReady, Converter={StaticResource BoolToVisibility}}" />
                     </StackPanel>
-                    <TextBlock Style="{StaticResource Space.Style.Caption}" Margin="0,10,0,0" Text="Updates come from GitHub Releases and are applied only when you choose, never during an install." />
+                    <TextBlock Style="{StaticResource Space.Style.Caption}" Margin="0,10,0,0" Text="Updates come from GitHub Releases, download in the background and install when you close the launcher (never during an install)." />
                 </StackPanel>
             </Border>
             <Border Style="{StaticResource Space.Card}" Margin="0,16,0,0">

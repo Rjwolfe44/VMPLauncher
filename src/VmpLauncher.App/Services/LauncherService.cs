@@ -189,6 +189,7 @@ public sealed class LauncherService : IDisposable
                 var token = linked.Token;
                 // Private packages first: nothing in the profile changes until every file is verified locally.
                 var sideloads = await _private.PrepareAsync(pack.Lock, isUpdate ? InstalledLock() : null, progress, token).ConfigureAwait(false);
+                await ImportFromCkanCachesAsync(pack.Lock, progress, token).ConfigureAwait(false);
                 return await _worker.RunAsync(() =>
                 {
                     var profile = EnsureProfileSeeded(pack, progress);
@@ -216,6 +217,10 @@ public sealed class LauncherService : IDisposable
                 // Repair restores from the installed lock; its private archives come from the private cache or the invite.
                 var installed = InstalledLock();
                 var sideloads = installed is null ? null : await _private.PrepareAsync(installed, null, progress, token).ConfigureAwait(false);
+                if (installed is not null)
+                {
+                    await ImportFromCkanCachesAsync(installed, progress, token).ConfigureAwait(false);
+                }
                 return await _worker.RunAsync(() => new ProfileOperations(_paths, new ProgressWriter(progress), progress).Repair(ProfilePaths, CacheDir, quarantineUnknownDlls, token, sideloads), token).ConfigureAwait(false);
             }).ConfigureAwait(false);
         }
@@ -333,6 +338,72 @@ public sealed class LauncherService : IDisposable
         {
             return null;
         }
+    }
+
+    /// <summary>
+    /// Before downloading: reuse matching archives from a normal CKAN client's download cache on this PC (hard-linked,
+    /// so they take no extra space on the same drive; each one is hash-checked against the lock first).
+    /// </summary>
+    private Task ImportFromCkanCachesAsync(PackLock lockDoc, IProgress<VmpLauncher.Ckan.Users.CkanProgress> progress, CancellationToken ct)
+    {
+        if (!OwnsCache)
+        {
+            return Task.CompletedTask; // the launcher already uses that cache directly
+        }
+        var sources = CkanCacheImporter.DiscoverCaches(CacheDir);
+        if (sources.Count == 0)
+        {
+            return Task.CompletedTask;
+        }
+        var cacheDir = CacheDir;
+        return Task.Run(() =>
+        {
+            var sink = new Progress<(int Done, int Total, string Name)>(p =>
+                progress.Report(new VmpLauncher.Ckan.Users.CkanProgress($"Checking your CKAN download cache for mods you already have ({p.Done}/{p.Total})", p.Total > 0 ? p.Done * 100 / p.Total : -1, null)));
+            var r = CkanCacheImporter.Import(lockDoc, cacheDir, sources, sink, ct);
+            if (r.Imported > 0)
+            {
+                progress.Report(new VmpLauncher.Ckan.Users.CkanProgress($"Reused {r.Imported} mod archive(s), {ViewModels.Format.Bytes(r.Bytes)}, from your CKAN download cache instead of downloading them.", -1, null));
+            }
+            _log.LogInformation("CKAN cache import from {Sources}: {Imported} reused ({Linked} linked, {Copied} copied, {Rejected} rejected), {Bytes} bytes",
+                string.Join(", ", r.Sources), r.Imported, r.Linked, r.Copied, r.Rejected, r.Bytes);
+        }, ct);
+    }
+
+    /// <summary>True when downloads live in the launcher's own cache (cleanup is never offered for a shared CKAN cache).</summary>
+    public bool OwnsCache => string.Equals(Path.GetFullPath(CacheDir).TrimEnd('\\'), Path.GetFullPath(_paths.CacheDir).TrimEnd('\\'), StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>What a cleanup would free: archives neither the current pack nor the installed version needs.</summary>
+    public Task<DownloadCacheCleaner.Plan?> AnalyzeCacheAsync()
+    {
+        var current = CurrentPack?.Lock;
+        if (current is null || !OwnsCache)
+        {
+            return Task.FromResult<DownloadCacheCleaner.Plan?>(null);
+        }
+        var installed = InstalledLock();
+        var cacheDir = CacheDir;
+        return Task.Run(() => (DownloadCacheCleaner.Plan?)DownloadCacheCleaner.Analyze(cacheDir, installed is null ? new[] { current } : new[] { current, installed }));
+    }
+
+    /// <summary>Removes old downloads (as an operation, so it never overlaps an install that could be using them).</summary>
+    public async Task<(int Files, long Bytes)> CleanCacheAsync(CancellationToken outer)
+    {
+        if (!OwnsCache)
+        {
+            throw new LauncherException(ErrorCode.InvalidPack, "The download cache is shared with another program, so the launcher does not clean it.", RecoveryHint.None);
+        }
+        var current = CurrentPack?.Lock ?? throw new LauncherException(ErrorCode.InvalidPack, "Load the pack first (Home), so the launcher knows which downloads are still needed.", RecoveryHint.Retry);
+        return await _runner.RunAsync(OperationKind.Cleanup, "Cleaning up old downloads", (progress, ct) => Task.Run(() =>
+        {
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, outer);
+            var installed = InstalledLock();
+            var plan = DownloadCacheCleaner.Analyze(CacheDir, installed is null ? new[] { current } : new[] { current, installed });
+            progress.Report(new VmpLauncher.Ckan.Users.CkanProgress($"Removing {plan.Remove.Count} old download(s)…", -1, null));
+            var result = DownloadCacheCleaner.Execute(plan, linked.Token);
+            _log.LogInformation("Cache cleanup: removed {Files} file(s), {Bytes} bytes", result.Files, result.Bytes);
+            return result;
+        }, ct)).ConfigureAwait(false);
     }
 
     public LmpClientInfo? InstalledClient() => ProfilePaths.Exists ? LmpClientInspector.Inspect(ProfilePaths.GameDir) : null;
