@@ -7,7 +7,7 @@ internal static class Program
 {
     public static int Main(string[] args)
     {
-        var dataDir = new Option<string?>("--data-dir") { Description = "Launcher data directory (default %LOCALAPPDATA%\\VmpLauncher or VMPL_DATA_DIR)." };
+        var dataDir = new Option<string?>("--data-dir") { Description = "Launcher data directory (default %LOCALAPPDATA%\\VmpLauncherData or VMPL_DATA_DIR)." };
         var root = new RootCommand("vmpl: VMP Launcher command line") { dataDir };
 
         var version = new Command("version", "Print launcher and CKAN core versions");
@@ -41,5 +41,5 @@ internal static class Program
     }
 
     internal static LauncherPaths ResolvePaths(string? dataDir)
-        => dataDir is null ? LauncherPaths.Default() : new LauncherPaths(dataDir);
+        => dataDir is null ? DataMigration.ResolveDefault().Paths : new LauncherPaths(dataDir);
 }

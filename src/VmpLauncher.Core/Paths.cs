@@ -1,9 +1,9 @@
 namespace VmpLauncher.Core;
 
 /// <summary>
-/// Well-known launcher directories. Everything lives under <c>%LOCALAPPDATA%\VmpLauncher</c> by default
-/// (never inside the Velopack app directory, which uninstall deletes). Tests and the CLI can override the
-/// root with <c>--data-dir</c> / <c>VMPL_DATA_DIR</c>.
+/// Well-known launcher directories. Everything lives under <c>%LOCALAPPDATA%\VmpLauncherData</c> by default, next to
+/// (never inside) Velopack's install folder <c>%LOCALAPPDATA%\VmpLauncher</c>, which Setup and uninstall delete.
+/// Tests and the CLI can override the root with <c>--data-dir</c> / <c>VMPL_DATA_DIR</c>.
 /// </summary>
 public sealed class LauncherPaths
 {
@@ -19,9 +19,18 @@ public sealed class LauncherPaths
         {
             return new LauncherPaths(env);
         }
-        var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        return new LauncherPaths(Path.Combine(local, "VmpLauncher"));
+        return new LauncherPaths(DefaultRoot) { IsDefaultLocation = true };
     }
+
+    private static string LocalAppData => Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+
+    public static string DefaultRoot => Path.Combine(LocalAppData, "VmpLauncherData");
+
+    /// <summary>Data root up to 0.2.1: Velopack's install folder itself. <see cref="DataMigration"/> moves it out.</summary>
+    public static string LegacyDefaultRoot => Path.Combine(LocalAppData, "VmpLauncher");
+
+    /// <summary>True when the root came from the default location rather than an override.</summary>
+    public bool IsDefaultLocation { get; private init; }
 
     public string DataRoot { get; }
     public string CkanDir => Path.Combine(DataRoot, "ckan");

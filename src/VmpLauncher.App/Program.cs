@@ -24,7 +24,8 @@ public static class Program
             .Run();
 
         var options = StartupOptions.Parse(args);
-        var paths = options.DataDir is null ? LauncherPaths.Default() : new LauncherPaths(options.DataDir);
+        // Moves 0.2.1-era data out of Velopack's install folder (Setup and uninstall would delete it).
+        var (paths, migrationNotes) = options.DataDir is null ? DataMigration.ResolveDefault() : (new LauncherPaths(options.DataDir), Array.Empty<string>());
         paths.EnsureCreated();
 
         // CKAN reads CKAN_CONFIG_FILE in a static initializer: set it before any CKAN type is touched.
@@ -52,6 +53,10 @@ public static class Program
         using var host = builder.Build();
         var log = host.Services.GetRequiredService<ILogger<App>>();
         log.LogInformation("VMP Launcher {Version} starting; data dir {DataRoot}", AppInfo.Version, paths.DataRoot);
+        foreach (var note in migrationNotes)
+        {
+            log.LogWarning("Data migration: {Note}", note);
+        }
 
         try
         {

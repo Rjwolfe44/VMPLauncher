@@ -34,8 +34,31 @@ public static class CkanBootstrap
                 """;
                 File.WriteAllText(paths.CkanConfigFile, json);
             }
+            else
+            {
+                PinCacheDir(paths);
+            }
             Environment.SetEnvironmentVariable("CKAN_CONFIG_FILE", paths.CkanConfigFile);
             _done = true;
+        }
+    }
+
+    /// <summary>Keeps CKAN's download cache on the launcher's cache even if the data root moved since the file was written.</summary>
+    private static void PinCacheDir(LauncherPaths paths)
+    {
+        try
+        {
+            var node = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(paths.CkanConfigFile)) as System.Text.Json.Nodes.JsonObject;
+            if (node is null || string.Equals(node["DownloadCacheDir"]?.GetValue<string>(), paths.CacheDir, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+            node["DownloadCacheDir"] = paths.CacheDir;
+            File.WriteAllText(paths.CkanConfigFile, node.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or InvalidOperationException)
+        {
+            // CKAN falls back to its own default and the next start tries again.
         }
     }
 
