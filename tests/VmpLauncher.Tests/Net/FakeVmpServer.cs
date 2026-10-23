@@ -22,13 +22,19 @@ internal sealed class FakeVmpServer : IDisposable
     private readonly bool _sendReplyMessage;
     private volatile bool _stop;
 
+    private readonly Func<(string PlayerName, string UniqueIdentifier, string ForkId, string Build), (int Code, string Reason)>? _reject;
+
     /// <param name="password">Null or empty = any hail accepted (server without password).</param>
     /// <param name="sendReplyMessage">False = only disconnect with the reason (exercises the disconnect-reason parser).</param>
-    public FakeVmpServer(string? password, string build = DefaultBuild, bool sendReplyMessage = true)
+    /// <param name="maximumConnections">0 = a full server: Lidgren answers every connect with "Server full" before any password check.</param>
+    /// <param name="reject">Overrides the handshake rejection (HandshakeReply code + reason); default is the exact-build mismatch.</param>
+    public FakeVmpServer(string? password, string build = DefaultBuild, bool sendReplyMessage = true, int maximumConnections = 32,
+        Func<(string PlayerName, string UniqueIdentifier, string ForkId, string Build), (int Code, string Reason)>? reject = null)
     {
         _password = password;
         _build = build;
         _sendReplyMessage = sendReplyMessage;
+        _reject = reject;
         var config = new NetPeerConfiguration("VMP")
         {
             LocalAddress = IPAddress.Loopback,
@@ -37,6 +43,7 @@ internal sealed class FakeVmpServer : IDisposable
             AutoExpandMTU = false,
             PingInterval = 1,
             ConnectionTimeout = 5,
+            MaximumConnections = maximumConnections,
         };
         config.EnableMessageType(NetIncomingMessageType.ConnectionApproval);
         _server = new NetServer(config);
@@ -108,7 +115,7 @@ internal sealed class FakeVmpServer : IDisposable
         var hs = (msg.ReadString(), msg.ReadString(), msg.ReadString(), msg.ReadString());
         Handshakes.Enqueue(hs);
 
-        var reason = $"Exact build mismatch: server requires '{_build}', client sent '{hs.Item4}'.";
+        var (code, reason) = _reject?.Invoke(hs) ?? (5, $"Exact build mismatch: server requires '{_build}', client sent '{hs.Item4}'.");
         if (_sendReplyMessage)
         {
             var reply = _server.CreateMessage();
@@ -120,7 +127,7 @@ internal sealed class FakeVmpServer : IDisposable
             reply.Write((ushort)2);
             reply.Write((ushort)0);
             reply.WritePadBits();
-            reply.Write(5);              // HandshakeReply.ProtocolBuildMismatch
+            reply.Write(code);           // HandshakeReply: 2 ServerFull, 4 ProtocolForkMismatch, 5 ProtocolBuildMismatch
             reply.Write(reason);
             reply.Write(false);
             reply.WritePadBits();

@@ -45,7 +45,7 @@
       "exclude": [ "Plugins/PluginData/**" ],
       "provides": [],
       "conflicts": [ "MechJeb2" ],
-      "distribution": { "kind": "private-sideload", "hint": "Ask Chevy for the ApexGuidance zip for this pack version." }
+      "distribution": { "kind": "private-github", "repo": "Rjwolfe44/VMP-Private-Mods", "tagPrefix": "apex-", "hint": "Paste the invite code from Chevy, or ask him for the ApexGuidance zip." }
     }
   ],
   "overrides": [],

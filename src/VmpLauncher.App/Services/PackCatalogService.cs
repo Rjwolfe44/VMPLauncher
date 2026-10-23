@@ -106,10 +106,14 @@ public sealed class PackCatalogService
             throw new LauncherException(ErrorCode.Tampered, "The downloaded lock does not match the hash in the channel file.", RecoveryHint.Retry);
         }
         await File.WriteAllBytesAsync(lockPath, lockBytes, ct).ConfigureAwait(false);
-        var lockSig = await TryGetStringAsync(new Uri(lockUri + ".sig"), ct).ConfigureAwait(false);
+        var (lockSig, sigMissing) = await TryGetStringWithStatusAsync(new Uri(lockUri + ".sig"), ct).ConfigureAwait(false);
         if (lockSig is not null)
         {
             await File.WriteAllTextAsync(lockPath + ".sig", lockSig, ct).ConfigureAwait(false);
+        }
+        else if (!sigMissing)
+        {
+            throw new HttpRequestException("Could not download the lock signature.");
         }
         else if (File.Exists(lockPath + ".sig"))
         {
@@ -124,6 +128,12 @@ public sealed class PackCatalogService
             throw new LauncherException(ErrorCode.Tampered, "The downloaded inventory does not match the lock.", RecoveryHint.Retry);
         }
         await File.WriteAllBytesAsync(invPath, invBytes, ct).ConfigureAwait(false);
+        // The changelog is display-only (unsigned); a failure to fetch it never blocks anything.
+        var changelog = await TryGetStringAsync(new Uri(packBase, "CHANGELOG.md"), ct).ConfigureAwait(false);
+        if (changelog is not null && changelog.Length < 512 * 1024)
+        {
+            await File.WriteAllTextAsync(Path.Combine(dir, "CHANGELOG.md"), changelog, ct).ConfigureAwait(false);
+        }
         var trust = _verifier.VerifyFile(lockPath, out _, out var reason);
         if (trust == TrustLevel.Tampered)
         {
@@ -152,13 +162,53 @@ public sealed class PackCatalogService
     }
 
     private static async Task<string?> TryGetStringAsync(Uri uri, CancellationToken ct)
+        => (await TryGetStringWithStatusAsync(uri, ct).ConfigureAwait(false)).Text;
+
+    /// <summary>Text, or null with <c>Missing</c> = true for a definite 404 and false for a transient failure.</summary>
+    private static async Task<(string? Text, bool Missing)> TryGetStringWithStatusAsync(Uri uri, CancellationToken ct)
     {
         try
         {
             using var response = await Http.GetAsync(uri, ct).ConfigureAwait(false);
-            return response.IsSuccessStatusCode ? await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false) : null;
+            if (response.IsSuccessStatusCode)
+            {
+                return (await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false), false);
+            }
+            return (null, response.StatusCode == System.Net.HttpStatusCode.NotFound);
         }
-        catch (HttpRequestException)
+        catch (Exception ex) when (ex is HttpRequestException || (ex is TaskCanceledException && !ct.IsCancellationRequested))
+        {
+            return (null, false);
+        }
+    }
+
+    /// <summary>
+    /// The changelog section for <paramref name="version"/> ("## version (date)" up to the next "## "), from the copy
+    /// cached next to the lock (online) or the pack folder above a local export. Null when there is none.
+    /// </summary>
+    public static string? WhatsNew(ResolvedPack pack)
+    {
+        try
+        {
+            var dir = Path.GetDirectoryName(pack.LockPath)!;
+            var candidates = new[] { Path.Combine(dir, "CHANGELOG.md"), Path.Combine(Path.GetDirectoryName(dir) ?? dir, "CHANGELOG.md") };
+            var file = candidates.FirstOrDefault(File.Exists);
+            if (file is null)
+            {
+                return null;
+            }
+            var lines = File.ReadAllLines(file);
+            var header = "## " + pack.Lock.Pack.Version;
+            var start = Array.FindIndex(lines, l => l.StartsWith(header, StringComparison.Ordinal));
+            if (start < 0)
+            {
+                return null;
+            }
+            var body = lines.Skip(start + 1).TakeWhile(l => !l.StartsWith("## ", StringComparison.Ordinal)).Where(l => l.Trim().Length > 0)
+                .Select(l => l.StartsWith("- ", StringComparison.Ordinal) ? "\u2022 " + l[2..] : l).Take(14).ToList();
+            return body.Count == 0 ? null : string.Join("\n", body);
+        }
+        catch (IOException)
         {
             return null;
         }

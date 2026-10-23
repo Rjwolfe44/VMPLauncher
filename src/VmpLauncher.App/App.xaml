@@ -22,6 +22,7 @@
                     <conv:BoolToSymbolConverter x:Key="BoolToSymbol" />
                     <conv:IntEqualsToVisibilityConverter x:Key="IntEqualsToVisibility" />
                     <conv:PasswordPlaceholderConverter x:Key="PasswordPlaceholder" />
+                    <conv:InvertBoolConverter x:Key="InvertBool" />
                 </ResourceDictionary>
                 <ResourceDictionary Source="pack://application:,,,/VmpLauncher;component/Themes/Controls.xaml" />
             </ResourceDictionary.MergedDictionaries>

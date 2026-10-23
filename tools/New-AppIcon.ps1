@@ -78,18 +78,8 @@ foreach ($p in $pngs) { $bw.Write($p.Bytes) }
 $bw.Flush()
 [System.IO.File]::WriteAllBytes((Join-Path $OutDir 'VmpLauncher.ico'), $ico.ToArray())
 
-# splash 600x300
-$splash = New-Object System.Drawing.Bitmap 600, 300
-$g = [System.Drawing.Graphics]::FromImage($splash); $g.SmoothingMode = 'AntiAlias'; $g.TextRenderingHint = 'ClearTypeGridFit'
-$g.Clear([System.Drawing.Color]::FromArgb(255, 0x0B, 0x0D, 0x17))
-$logo = Draw-Icon 160; $g.DrawImage($logo, 40, 70, 160, 160); $logo.Dispose()
-$font = New-Object System.Drawing.Font ('Segoe UI', [single]30, [System.Drawing.FontStyle]::Bold)
-$g.DrawString('VMP Launcher', $font, (New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(255,0xEC,0xEA,0xF6))), 230, 105)
-$font2 = New-Object System.Drawing.Font ('Segoe UI', [single]13)
-$g.DrawString('Loading…', $font2, (New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(255,0xA9,0xA6,0xC4))), 234, 160)
-$g.Dispose()
-$splash.Save((Join-Path $OutDir 'splash.png'), [System.Drawing.Imaging.ImageFormat]::Png)
-$splash.Dispose()
+# splash: drawn by its own ASCII-only script (see the note there)
+& (Join-Path $PSScriptRoot 'New-Splash.ps1') -OutDir $OutDir
 # 256 png for README / gallery
 $big = Draw-Icon 256; $big.Save((Join-Path $OutDir 'VmpLauncher-256.png'), [System.Drawing.Imaging.ImageFormat]::Png); $big.Dispose()
 Write-Host "Wrote icon + splash to $OutDir"

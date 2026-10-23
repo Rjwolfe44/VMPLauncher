@@ -25,6 +25,10 @@ public sealed record AppSettings
     public string? CacheDirOverride { get; init; }
     public bool WelcomeCompleted { get; init; }
     public List<string> RememberedKspPaths { get; init; } = new();
+    /// <summary>Private mod repositories this PC holds an invite token for (tokens themselves live in the DPAPI store).</summary>
+    public List<string> PrivateRepos { get; init; } = new();
+    /// <summary>Apply pack updates automatically when the launcher starts (only when nothing needs the user).</summary>
+    public bool AutoUpdatePack { get; init; } = true;
 }
 
 public sealed class AppSettingsStore
@@ -52,8 +56,19 @@ public sealed class AppSettingsStore
         lock (_gate)
         {
             next = change(_current);
+            if (ReferenceEquals(next, _current))
+            {
+                return;
+            }
             _current = next;
-            LauncherJson.WriteFile(_path, next);
+            try
+            {
+                LauncherJson.WriteFile(_path, next);
+            }
+            catch (IOException)
+            {
+                // Settings stay applied in memory; the next successful write persists them.
+            }
         }
         Changed?.Invoke(next);
     }

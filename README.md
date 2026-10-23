@@ -24,8 +24,10 @@ instead of a multi-gigabyte zip, keeps it verified against the server, and joins
    **More info → Run anyway**. The .NET 10 Desktop Runtime is installed automatically if missing (one UAC prompt).
 2. Run the launcher. It finds your KSP (1.12.5 with Making History and Breaking Ground), asks where the modded copy
    should live, and takes your player name and the server password (saved only on your PC).
-3. **Install.** About 8.7 GB of mods are downloaded from their upstream sources and verified. Private packages the
-   host hands you (e.g. ApexGuidance) are dropped onto the Home page.
+3. **Install.** About 8.7 GB of mods are downloaded from their upstream sources and verified. If the host sent you an
+   **invite code**, paste it once (setup wizard, Home or Settings): it fills in the server password and lets the
+   launcher download the host's private mods (e.g. ApexGuidance), and every later version of them, by itself. Without
+   an invite, drop the private zip the host sends you onto the Home page.
 4. **Play.** Pick a route (Playit works from anywhere), press Play, KSP starts and joins the server.
 
 See [docs/FRIEND-GUIDE.md](docs/FRIEND-GUIDE.md).
@@ -52,6 +54,13 @@ $vmpl = "src\VmpLauncher.Cli\bin\Debug\net10.0-windows\win-x64\vmpl.exe"
 & $vmpl publish --pack packs\vmp-train-career\vmp-train-career.vmpack.json --notes "What changed" --execute  # asks you to type PUBLISH
 & $vmpl verify-remote --pack-id vmp-train-career                                                             # what friends will see, incl. route probes
 
+# private mods (one-time): a PRIVATE repo for your own mods + a read-only token that invite codes carry
+gh repo create Rjwolfe44/VMP-Private-Mods --private
+#   then on github.com: Settings > Developer settings > Fine-grained tokens > Generate:
+#   repository access "Only select repositories: VMP-Private-Mods", permission "Contents: Read-only"
+& $vmpl private set-token --repo Rjwolfe44/VMP-Private-Mods     # asks for the token without echo, checks it
+& $vmpl private invite --repo Rjwolfe44/VMP-Private-Mods        # copies an invite code (token + server password)
+
 # lower-level pieces, if you need them
 & $vmpl capture ...            # export only (what publish does in step 2)
 & $vmpl verify-export <dir>    # validate an export or staged version folder
@@ -77,7 +86,26 @@ verifies the staged copy again. Without `--execute` the staging goes to a scratc
 is printed verbatim. With `--execute` it refuses a dirty or stale repository, creates missing GitHub release assets
 and checks their hash after upload, commits and pushes, uploads the policy to the server over SSH (checksum, backup,
 stop, replace, start, confirm running) only when the policy changed, then fetches everything back from the public
-URLs and probes the routes. Private packages are never uploaded; their file names are listed for hand-out.
+URLs and probes the routes.
+
+The same flow is in the launcher itself on the host's PC: **Host tools** (shown only where a publisher key and a publish
+configuration exist) runs the check, shows every action, and publishes after you type PUBLISH. It also makes invite
+codes.
+
+### Private mods
+
+A custom package with `"distribution": { "kind": "private-github", "repo": "owner/private-repo", "tagPrefix": "apex-" }`
+is uploaded by `publish --execute` as a release asset of that **private** repository (the upload refuses unless GitHub
+reports the repository as private), then downloaded back and hash-checked. The signed lock records where it lives.
+Friends' launchers that hold an invite code download it with the read-only token, verify it against the lock, and
+keep it in a local private cache, so when you rebuild ApexGuidance and publish, friends get the new build with the
+next pack update without asking you for a file. Older launchers and friends without an invite still see the
+"drop the zip here" card. Any number of your own mods can share one private repository (one custom package each,
+each with its own `tagPrefix`).
+
+An invite code is a bearer secret: anyone holding it can download your private mods. Send it privately. To cut
+everyone off, revoke the token on GitHub and send new invites. Never use your own login token (`gh auth token`) for
+this; the launcher refuses classic and OAuth tokens. `private-sideload` (hand-over only) still works.
 
 ## Layout
 

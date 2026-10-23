@@ -10,3 +10,6 @@ TestResults/
 external/CKAN/_build/
 # local developer state
 *.local.json
+
+# agent worktrees
+.claude/worktrees/

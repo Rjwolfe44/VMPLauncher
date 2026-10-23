@@ -1,7 +1,8 @@
 # Joining VMP Train Career
 
 You need: your own **Kerbal Space Program 1.12.5** (Steam build 03190) with **Making History** and
-**Breaking Ground**, about **15 GB** free disk space, and the **server password** from the host.
+**Breaking Ground**, about **15 GB** free disk space, and the **invite code** (or at least the server password)
+from the host.
 
 ## 1. Install the launcher
 
@@ -15,15 +16,21 @@ Download `VmpLauncher-win-Setup.exe` from the latest release and run it.
 
 1. **Find KSP**: the launcher lists Steam installs it found. Pick yours or browse to the folder with `KSP_x64.exe`.
 2. **Profile folder**: where the modded copy lives. Same drive as your KSP = less disk use. Keep the path short.
-3. **Player**: your in-game name (1–15 letters/digits/`_`/`-`, different from the host's) and the server password.
-   The password is saved only on your PC. Accept the VMP disclaimer.
+3. **Player**: your in-game name (1–15 letters/digits/`_`/`-`, different from the host's). Paste the **invite code**
+   the host sent you (it starts with `VMPINVITE1-`): it fills in the server password and unlocks the host's private
+   mods. No invite? Type the server password instead. Both are stored encrypted on your PC only. Accept the VMP
+   disclaimer.
 
 ## 3. Install
 
 Press **Install** on the Home page. The launcher downloads ~8.7 GB of mods from their upstream sources and verifies
-every file. If the pack needs a **private package** (ApexGuidance), the host sends you a zip: drop it onto the Home
-page and it is checked against the pack before anything is installed. You can cancel at any time; nothing is left
-half-installed.
+every file. Private mods (ApexGuidance) download by themselves when you used an invite code, now and on every later
+update. Without an invite, the Home page asks for the zip: drop it there, or paste an invite code on Home or in
+Settings. Every file is checked against the signed pack before anything is installed. You can cancel at any time;
+nothing is left half-installed.
+
+Pack updates install by themselves when you open the launcher (only changed mods are downloaded). Turn that off in
+Settings if you prefer to press **Update** yourself.
 
 ## 4. Play
 

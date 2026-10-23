@@ -27,8 +27,15 @@ public static partial class VmpProtocol
     /// <summary>Hail prefix for reachability probes. Deliberately never a valid password.</summary>
     public const string StatusProbeHailPrefix = "vmp-launcher-status-probe/";
 
-    /// <summary><c>SessionAdmission</c>: "Exact build mismatch: server requires 'X', client sent 'Y'."</summary>
-    [GeneratedRegex(@"server requires '(?<b>[^']+)'", RegexOptions.CultureInvariant)]
+    /// <summary>Disconnect reason Lidgren itself sends when every connection slot is taken (before the password check).</summary>
+    public const string ServerFullReason = "Server full";
+
+    /// <summary>
+    /// <c>SessionAdmission</c>: "Exact build mismatch: server requires 'X', client sent 'Y'." Anchored on the whole
+    /// exact-build message form: the fork rejection ("Protocol/fork mismatch: server requires 'VMP.VladMultiplayer', ...")
+    /// also says "server requires" but carries the fork id, not a build.
+    /// </summary>
+    [GeneratedRegex(@"Exact build mismatch: server requires '(?<b>[^']+)'", RegexOptions.CultureInvariant)]
     public static partial Regex ServerRequiresRegex();
 
     public static string? TryParseServerBuild(string? reason)
@@ -43,6 +50,10 @@ public static partial class VmpProtocol
 
     public static bool IsInvalidPassword(string? reason)
         => reason is not null && reason.Contains(InvalidPasswordReason, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>True for the "Server full" disconnect reason (Lidgren's slot check, and VMP's own handshake check).</summary>
+    public static bool IsServerFull(string? reason)
+        => reason is not null && reason.Trim().Equals(ServerFullReason, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Mirrors <c>SessionAdmission.AreExactBuildsCompatible</c>: trimmed ordinal comparison where a trailing

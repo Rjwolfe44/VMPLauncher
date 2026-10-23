@@ -76,7 +76,10 @@ public sealed record VersionSource
 
 public sealed record DistributionSpec
 {
-    /// <summary>"github-release" | "private-sideload" | "url".</summary>
+    /// <summary>
+    /// "github-release" (public release asset) | "private-github" (release asset in a private repository, fetched by
+    /// launchers that hold an invite token; hand-over fallback for the rest) | "private-sideload" (hand-over only) | "url".
+    /// </summary>
     public string Kind { get; init; } = "github-release";
     public string? Repo { get; init; }
     public string? TagPrefix { get; init; }

@@ -4,8 +4,8 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using VmpLauncher.App.Services;
 using VmpLauncher.Core;
+using VmpLauncher.Core.Diagnostics;
 using VmpLauncher.Game;
-using Wpf.Ui;
 
 namespace VmpLauncher.App.ViewModels;
 
@@ -13,47 +13,90 @@ public partial class KspCandidate : ObservableObject
 {
     public required KspInstallInfo Info { get; init; }
     public string Title => Info.Path;
-    public string Summary => $"{(Info.HasExecutable ? "KSP_x64.exe" : "no executable")} · build {Info.BuildId ?? "?"} · {(Info.HasMakingHistory ? "Making History" : "no Making History")} · {(Info.HasBreakingGround ? "Breaking Ground" : "no Breaking Ground")}";
+    public string Summary => $"{(Info.HasExecutable ? "KSP_x64.exe found" : "no KSP_x64.exe")} · build {Info.BuildId ?? "?"} · {(Info.HasMakingHistory ? "Making History" : "no Making History")} · {(Info.HasBreakingGround ? "Breaking Ground" : "no Breaking Ground")}";
     public bool Complete => Info.IsComplete("03190");
     [ObservableProperty] private bool _isSelected;
 }
 
-/// <summary>First-run wizard: find KSP → profile location → player setup.</summary>
+public partial class WizardStep : ObservableObject
+{
+    public required int Index { get; init; }
+    public required string Label { get; init; }
+    [ObservableProperty] private bool _isActive;
+    [ObservableProperty] private bool _isDone;
+    public string Number => (Index + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
+}
+
+/// <summary>First-run wizard: welcome → find KSP → profile location → player (+ optional invite code).</summary>
 public partial class WelcomeViewModel : ObservableObject
 {
     private readonly AppSettingsStore _settings;
     private readonly ISecretStore _secrets;
     private readonly LauncherPaths _paths;
-    private readonly INavigationService _navigation;
+    private readonly LauncherService _launcher;
+    private readonly IAppNavigator _navigation;
+    private bool _acceptedIncomplete;
 
-    public WelcomeViewModel(AppSettingsStore settings, ISecretStore secrets, LauncherPaths paths, INavigationService navigation)
+    public WelcomeViewModel(AppSettingsStore settings, ISecretStore secrets, LauncherPaths paths, LauncherService launcher, IAppNavigator navigation)
     {
         _settings = settings;
         _secrets = secrets;
         _paths = paths;
+        _launcher = launcher;
         _navigation = navigation;
         var s = settings.Current;
-        PlayerName = s.PlayerName ?? string.Empty;
-        ProfileRoot = s.ProfileRoot ?? Path.Combine(paths.ProfilesDir, s.ActiveProfileId);
-        DisclaimerAccepted = s.DisclaimerAccepted;
+        _playerName = s.PlayerName ?? string.Empty;
+        _profileRoot = s.ProfileRoot ?? Path.Combine(paths.ProfilesDir, s.ActiveProfileId);
+        _disclaimerAccepted = s.DisclaimerAccepted;
+        Steps = new ObservableCollection<WizardStep>
+        {
+            new() { Index = 0, Label = "Welcome", IsActive = true },
+            new() { Index = 1, Label = "Your KSP" },
+            new() { Index = 2, Label = "Install folder" },
+            new() { Index = 3, Label = "You" },
+        };
     }
 
     public ObservableCollection<KspCandidate> Candidates { get; } = new();
+    public ObservableCollection<WizardStep> Steps { get; }
 
     [ObservableProperty] private int _step;
-    [ObservableProperty] private string _playerName = string.Empty;
+    [ObservableProperty] private string _playerName;
     [ObservableProperty] private string _password = string.Empty;
+    [ObservableProperty] private string _inviteText = string.Empty;
     [ObservableProperty] private bool _disclaimerAccepted;
-    [ObservableProperty] private string _profileRoot = string.Empty;
+    [ObservableProperty] private string _profileRoot;
     [ObservableProperty] private string _profileHint = string.Empty;
     [ObservableProperty] private string _validation = string.Empty;
+    [ObservableProperty] private string _nextLabel = "Get started";
+    [ObservableProperty] private bool _canGoBack;
 
     public bool PlayerNameValid => VmpSettingsFile.PlayerNamePattern.IsMatch(PlayerName);
 
     public string Disclaimer =>
-        "VMP (Vlad Multiplayer) is a community mod based on Luna Multiplayer. It synchronises your game with other players on the host's server. " +
-        "Use a dedicated profile (this launcher creates one), expect occasional desyncs, and never share the server password publicly. " +
-        "By accepting you agree to let the mod exchange vessel, time and chat data with the server.";
+        "VMP (Vlad Multiplayer) is a community mod based on Luna Multiplayer. It synchronises your game with the host's server. " +
+        "The launcher keeps it in its own modded copy, so your normal KSP and saves are untouched. Expect the odd desync, and never share the server password publicly. " +
+        "By accepting you let the mod exchange vessel, time and chat data with the server.";
+
+    partial void OnStepChanged(int value)
+    {
+        foreach (var s in Steps)
+        {
+            s.IsActive = s.Index == value;
+            s.IsDone = s.Index < value;
+        }
+        NextLabel = value switch { 0 => "Get started", 3 => "Finish", _ => "Continue" };
+        CanGoBack = value > 0;
+    }
+
+    /// <summary>Opening the wizard again from Settings starts at the beginning.</summary>
+    public void OnShown()
+    {
+        if (_settings.Current.WelcomeCompleted && Step == 3)
+        {
+            Step = 0;
+        }
+    }
 
     [RelayCommand]
     public void Detect()
@@ -72,7 +115,7 @@ public partial class WelcomeViewModel : ObservableObject
     [RelayCommand]
     private void Browse()
     {
-        var dlg = new Microsoft.Win32.OpenFolderDialog { Title = "Choose your Kerbal Space Program folder" };
+        var dlg = new Microsoft.Win32.OpenFolderDialog { Title = "Choose your Kerbal Space Program folder (the one with KSP_x64.exe)" };
         if (dlg.ShowDialog() == true)
         {
             var info = KspLocator.Inspect(dlg.FolderName);
@@ -81,13 +124,14 @@ public partial class WelcomeViewModel : ObservableObject
                 c.IsSelected = false;
             }
             Candidates.Insert(0, new KspCandidate { Info = info, IsSelected = true });
+            _acceptedIncomplete = false;
         }
     }
 
     [RelayCommand]
     private void BrowseProfile()
     {
-        var dlg = new Microsoft.Win32.OpenFolderDialog { Title = "Choose where the modded KSP profile lives (needs ~15 GB)" };
+        var dlg = new Microsoft.Win32.OpenFolderDialog { Title = "Choose where the modded copy goes (needs about 15 GB)" };
         if (dlg.ShowDialog() == true)
         {
             ProfileRoot = Path.Combine(dlg.FolderName, _settings.Current.ActiveProfileId);
@@ -101,6 +145,8 @@ public partial class WelcomeViewModel : ObservableObject
         {
             x.IsSelected = ReferenceEquals(x, c);
         }
+        _acceptedIncomplete = false;
+        Validation = string.Empty;
     }
 
     [RelayCommand]
@@ -118,12 +164,14 @@ public partial class WelcomeViewModel : ObservableObject
                 var sel = Candidates.FirstOrDefault(c => c.IsSelected);
                 if (sel is null || !sel.Info.HasExecutable)
                 {
-                    Validation = "Choose a KSP folder that contains KSP_x64.exe.";
+                    Validation = "Choose a KSP folder that contains KSP_x64.exe. Use Browse if it is not listed.";
                     return;
                 }
-                if (!sel.Complete)
+                if (!sel.Complete && !_acceptedIncomplete)
                 {
-                    Validation = "This install is missing the required version or DLC. You can continue, but installing the pack will fail until it is fixed.";
+                    _acceptedIncomplete = true;
+                    Validation = "This install is not KSP 1.12.5 with both DLCs, so installing the pack will fail until it is. Press Continue again to use it anyway.";
+                    return;
                 }
                 _settings.Update(s => s with { SourceKspPath = sel.Info.Path, RememberedKspPaths = s.RememberedKspPaths.Append(sel.Info.Path).Distinct(StringComparer.OrdinalIgnoreCase).ToList() });
                 UpdateProfileHint();
@@ -136,7 +184,7 @@ public partial class WelcomeViewModel : ObservableObject
                 {
                     Core.Profiles.ProfilePathValidator.Validate(ProfileRoot, 180, _settings.Current.SourceKspPath, _paths.CacheDir);
                 }
-                catch (Core.Diagnostics.LauncherException ex)
+                catch (LauncherException ex)
                 {
                     Validation = ex.Message;
                     return;
@@ -150,16 +198,29 @@ public partial class WelcomeViewModel : ObservableObject
             {
                 if (!PlayerNameValid)
                 {
-                    Validation = "Player name: 1-15 characters, letters, digits, _ or -. It must differ from the host's name.";
+                    Validation = "Player name: 1 to 15 letters, digits, _ or -. It must differ from the host's name.";
                     return;
+                }
+                if (!string.IsNullOrWhiteSpace(InviteText))
+                {
+                    try
+                    {
+                        _launcher.PrivateMods.ApplyInvite(InviteText, _launcher.PasswordKey);
+                        InviteText = string.Empty;
+                    }
+                    catch (LauncherException ex)
+                    {
+                        Validation = ex.Message;
+                        return;
+                    }
                 }
                 _settings.Update(s => s with { PlayerName = PlayerName, DisclaimerAccepted = DisclaimerAccepted, WelcomeCompleted = true });
                 if (!string.IsNullOrEmpty(Password))
                 {
-                    _secrets.Set($"server-password:{_settings.Current.ActiveProfileId}", Password);
+                    _secrets.Set(_launcher.PasswordKey, Password);
                     Password = string.Empty;
                 }
-                _navigation.Navigate(typeof(Views.Pages.HomePage));
+                _navigation.Navigate(AppPage.Home);
                 break;
             }
         }
@@ -185,8 +246,8 @@ public partial class WelcomeViewModel : ObservableObject
             var same = source is not null && Core.Profiles.ProfilePathValidator.SameVolume(source, ProfileRoot);
             var drive = new DriveInfo(Path.GetPathRoot(Path.GetFullPath(ProfileRoot))!);
             ProfileHint = same
-                ? $"Same drive as your KSP: stock files are hard-linked (saves ~5.6 GB). {Format.Bytes(drive.AvailableFreeSpace)} free; the pack needs ~13 GB."
-                : $"Different drive from your KSP: stock files are copied (~5.7 GB extra). {Format.Bytes(drive.AvailableFreeSpace)} free; the pack needs ~19 GB.";
+                ? $"Same drive as your KSP, so stock files are linked instead of copied (saves about 5.6 GB). {Format.Bytes(drive.AvailableFreeSpace)} free; the pack needs about 13 GB."
+                : $"Different drive from your KSP, so stock files are copied (about 5.7 GB extra). {Format.Bytes(drive.AvailableFreeSpace)} free; the pack needs about 19 GB.";
         }
         catch (Exception)
         {

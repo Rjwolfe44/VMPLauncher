@@ -140,12 +140,16 @@ public sealed class ConnectionDoctor
 
             // 5. Routes: L1, then L2/L3 when a password is available.
             string? serverBuild = null;
+            // An L1 "Online" means the server refused our random sentinel password, which proves it has a password
+            // even when servers.json says passwordRequired=false.
+            var passwordProvenRequired = false;
             foreach (var route in routes)
             {
                 var label = RouteLabel(route);
                 var reachId = $"route.{route.Id}.reach";
                 yield return Running(reachId, $"{label}: server reachable");
                 var l1 = await ProbeAsync(route, ProbeLevel.Reachability, null, cancellationToken).ConfigureAwait(false);
+                passwordProvenRequired |= l1.Outcome == ProbeOutcome.Online;
                 yield return Final(ReachStep(reachId, $"{label}: server reachable", route, l1, zt));
                 if (l1.Outcome is not (ProbeOutcome.Online or ProbeOutcome.OnlineNoPassword))
                 {
@@ -158,7 +162,7 @@ public sealed class ConnectionDoctor
                 if (string.IsNullOrEmpty(password))
                 {
                     // Warn once; later routes just note the skip.
-                    var required = directory.Server.PasswordRequired && l1.Outcome != ProbeOutcome.OnlineNoPassword
+                    var required = (directory.Server.PasswordRequired || passwordProvenRequired) && l1.Outcome != ProbeOutcome.OnlineNoPassword
                         && !Results.Any(s => s.Fix == DoctorFix.EnterPassword);
                     yield return Final(new DoctorStep(pwId, $"{label}: password", required ? DoctorStatus.Warn : DoctorStatus.Skipped,
                         required ? "No saved password, so the password and version checks were skipped. Enter the password from the host." : "No saved password; skipped.",
@@ -403,6 +407,8 @@ public sealed class ConnectionDoctor
                     _ => new DoctorStep(id, title, DoctorStatus.Fail,
                         $"The server didn't answer. It may be offline, or a firewall is blocking UDP port {route.Port}.", details, DoctorFix.CheckFirewall),
                 };
+            case ProbeOutcome.ServerFull:
+                return new DoctorStep(id, title, DoctorStatus.Warn, "The server is up but full (all player slots are taken). Try again later.", details);
             case ProbeOutcome.Rejected:
                 return new DoctorStep(id, title, DoctorStatus.Warn, "Something answered, but it didn't behave like the VMP server.", details);
             default:
@@ -415,20 +421,39 @@ public sealed class ConnectionDoctor
         ProbeOutcome.PasswordOk => new DoctorStep(id, title, DoctorStatus.Pass, "Your saved password is correct.", ProbeDetails(null, r)),
         ProbeOutcome.WrongPassword => new DoctorStep(id, title, DoctorStatus.Fail, "The server rejected your saved password. Enter the current password from the host.", ProbeDetails(null, r), DoctorFix.EnterPassword),
         ProbeOutcome.Unreachable => new DoctorStep(id, title, DoctorStatus.Warn, "The server stopped answering during the password check. Try again in a minute.", ProbeDetails(null, r)),
+        ProbeOutcome.ServerFull => new DoctorStep(id, title, DoctorStatus.Warn, "The server is up but full (all player slots are taken), so the password couldn't be checked. Try again later.", ProbeDetails(null, r)),
         _ => new DoctorStep(id, title, DoctorStatus.Warn, "The password check didn't give a clear answer.", ProbeDetails(null, r)),
     };
 
-    private static DoctorStep BuildProbeStep(string id, string title, ProbeResult r) => r.Outcome == ProbeOutcome.BuildReported
-        ? new DoctorStep(id, title, DoctorStatus.Pass, $"The server is running VMP {r.ServerBuild}.", ProbeDetails(null, r))
-        : new DoctorStep(id, title, DoctorStatus.Warn, "Couldn't read the server's VMP version.", ProbeDetails(null, r));
+    private static DoctorStep BuildProbeStep(string id, string title, ProbeResult r) => r.Outcome switch
+    {
+        ProbeOutcome.BuildReported => new DoctorStep(id, title, DoctorStatus.Pass, $"The server is running VMP {r.ServerBuild}.", ProbeDetails(null, r)),
+        ProbeOutcome.ServerFull => new DoctorStep(id, title, DoctorStatus.Warn, "The server is up but full (all player slots are taken), so its version couldn't be read. Try again later.", ProbeDetails(null, r)),
+        _ => new DoctorStep(id, title, DoctorStatus.Warn, "Couldn't read the server's VMP version.", ProbeDetails(null, r)),
+    };
 
     private DoctorStep CompareStep(string? serverBuild, ServerDirectory directory)
     {
         const string id = "build.compare", title = "Your VMP version";
-        var installed = _o.InstalledBuild?.Invoke();
+        string? installed = null, unreadable = null;
+        try
+        {
+            installed = _o.InstalledBuild?.Invoke();
+        }
+        catch (Exception e) when (e is BadImageFormatException or InvalidOperationException or InvalidDataException or IOException or UnauthorizedAccessException)
+        {
+            // A truncated or corrupt LmpClient.dll must not take the whole diagnosis down.
+            unreadable = e.Message;
+        }
         var expected = serverBuild ?? (string.IsNullOrWhiteSpace(directory.Server.RequiredBuild) ? null : directory.Server.RequiredBuild);
         var source = serverBuild is not null ? "reported by the server" : "from the server list";
         var details = $"installed={installed ?? "-"} server={serverBuild ?? "-"} serverList={directory.Server.RequiredBuild}";
+        if (unreadable is not null)
+        {
+            return new DoctorStep(id, title, DoctorStatus.Warn,
+                "VMP client unreadable: update or repair the pack." + (expected is null ? string.Empty : $" The server needs {expected}."),
+                details + $"\nclient error: {unreadable}", DoctorFix.UpdatePack);
+        }
         if (serverBuild is not null && !string.IsNullOrWhiteSpace(directory.Server.RequiredBuild) && !VmpProtocol.AreBuildsCompatible(serverBuild, directory.Server.RequiredBuild))
         {
             details += "\nThe server list's requiredBuild differs from what the server reports; the host should republish the server list.";
@@ -443,7 +468,7 @@ public sealed class ConnectionDoctor
         }
         if (installed is null)
         {
-            return new DoctorStep(id, title, DoctorStatus.Warn, $"Couldn't find the VMP client in your game folder. The server needs {expected}.", details, DoctorFix.UpdatePack);
+            return new DoctorStep(id, title, DoctorStatus.Warn, $"Couldn't find a usable VMP client in your game folder (it may be missing or damaged). Update or repair the pack. The server needs {expected}.", details, DoctorFix.UpdatePack);
         }
         return VmpProtocol.AreBuildsCompatible(installed, expected)
             ? new DoctorStep(id, title, DoctorStatus.Pass, $"Your VMP version {installed} matches the server ({source}).", details)

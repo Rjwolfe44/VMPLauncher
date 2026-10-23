@@ -3,6 +3,7 @@ using VmpLauncher.Core.Hashing;
 using VmpLauncher.Core.Inventory;
 using VmpLauncher.Core.Packs;
 using VmpLauncher.Core.Profiles;
+using VmpLauncher.Core.Security;
 
 namespace VmpLauncher.Core.Transactions;
 
@@ -98,11 +99,12 @@ public sealed class InstallVerifier
         foreach (var root in new[] { "GameData" })
         {
             var abs = Path.Combine(profile.GameDir, root);
-            if (!Directory.Exists(abs))
+            if (!Directory.Exists(abs) || SafePath.IsReparsePoint(abs))
             {
                 continue;
             }
-            foreach (var file in Directory.EnumerateFiles(abs, "*", SearchOption.AllDirectories))
+            // Junctions and symbolic links are not followed: what they point at is not part of the profile.
+            foreach (var file in Directory.EnumerateFiles(abs, "*", SafePath.RecurseSkippingReparsePoints()))
             {
                 var rel = Path.GetRelativePath(profile.GameDir, file).Replace('\\', '/');
                 if (known.Contains(rel) || ruleSet.IsIgnored(rel))

@@ -3,13 +3,14 @@ using VmpLauncher.App.ViewModels;
 
 namespace VmpLauncher.App.Views.Pages;
 
-public partial class WelcomePage : Page
+public partial class WelcomePage : UserControl
 {
     public WelcomePage(WelcomeViewModel viewModel)
     {
         ViewModel = viewModel;
         DataContext = viewModel;
         InitializeComponent();
+        Loaded += (_, _) => ViewModel.OnShown();
     }
 
     public WelcomeViewModel ViewModel { get; }

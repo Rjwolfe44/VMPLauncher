@@ -6,24 +6,30 @@ using VmpLauncher.App.Services;
 
 namespace VmpLauncher.App.ViewModels;
 
-/// <summary>Activity page: samples the operation runner at 10 Hz and shows the recent log lines.</summary>
+/// <summary>Activity page: samples the operation runner at 10 Hz and appends new log lines (never reads a list another thread writes).</summary>
 public partial class InstallViewModel : ObservableObject
 {
-    private readonly OperationRunner _runner;
-    private readonly DispatcherTimer _timer;
-    private int _shownLines;
+    private const int MaxShown = 400;
 
-    public InstallViewModel(OperationRunner runner)
+    private readonly OperationRunner _runner;
+    private readonly IAppNavigator _navigation;
+    private readonly DispatcherTimer _timer;
+    private long _nextLine;
+
+    public InstallViewModel(OperationRunner runner, IAppNavigator navigation)
     {
         _runner = runner;
+        _navigation = navigation;
         _timer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(100) };
         _timer.Tick += (_, _) => Sample();
         _timer.Start();
     }
 
     [ObservableProperty] private bool _isRunning;
+    [ObservableProperty] private bool _hasHistory;
     [ObservableProperty] private string _title = "Nothing running";
-    [ObservableProperty] private string _message = "Install or update from the Home page to see progress here.";
+    [ObservableProperty] private string _message = "Installs, updates and repairs show their progress here.";
+    [ObservableProperty] private string _stateKind = "neutral";
     [ObservableProperty] private int _percent;
     [ObservableProperty] private bool _indeterminate;
     [ObservableProperty] private string _speed = string.Empty;
@@ -32,43 +38,75 @@ public partial class InstallViewModel : ObservableObject
 
     public ObservableCollection<string> Lines { get; } = new();
 
+    /// <summary>Raised after new lines were appended (the view scrolls to the end).</summary>
+    public event Action? LinesAppended;
+
     private void Sample()
     {
         var s = _runner.Snapshot;
         IsRunning = s is not null;
-        if (s is null)
+        if (s is not null)
         {
-            if (Title != "Nothing running" && Lines.Count > 0)
-            {
-                Title = "Finished";
-                Message = Lines[^1];
-            }
-            return;
+            Title = s.Title;
+            Message = s.Message;
+            StateKind = "checking";
+            Indeterminate = s.Percent <= 0;
+            Percent = Math.Clamp(s.Percent, 0, 100);
+            Speed = s.BytesPerSecond is { } bps && bps > 0 ? Format.Speed(bps) : string.Empty;
+            TimeLeft = string.IsNullOrEmpty(s.TimeLeft) ? string.Empty : s.TimeLeft + " left";
+            Elapsed = (DateTimeOffset.UtcNow - s.StartedUtc).ToString(@"m\:ss") + " elapsed";
         }
-        Title = s.Title;
-        Message = s.Message;
-        Indeterminate = s.Percent < 0;
-        Percent = Math.Clamp(s.Percent, 0, 100);
-        Speed = s.BytesPerSecond is { } bps && bps > 0 ? Format.Speed(bps) : string.Empty;
-        TimeLeft = s.TimeLeft ?? string.Empty;
-        Elapsed = (DateTimeOffset.UtcNow - s.StartedUtc).ToString(@"m\:ss");
-        var lines = _runner.RecentLines;
-        if (lines.Count < _shownLines)
+        else if (_runner.LastOutcome is { } o)
         {
+            Title = o.Succeeded ? $"{o.Title}: done" : o.Cancelled ? $"{o.Title}: cancelled" : $"{o.Title}: failed";
+            Message = $"{o.Message} ({Format.Ago(o.FinishedUtc)})";
+            StateKind = o.Succeeded ? "ok" : o.Cancelled ? "warn" : "error";
+            Indeterminate = false;
+            Percent = o.Succeeded ? 100 : Percent;
+            Speed = TimeLeft = string.Empty;
+            Elapsed = $"took {o.Elapsed:m\\:ss}";
+        }
+
+        if (s is not null && s.StartedUtc != _shownStart)
+        {
+            // A new operation started: show its log from the top.
+            _shownStart = s.StartedUtc;
             Lines.Clear();
-            _shownLines = 0;
         }
-        for (var i = _shownLines; i < lines.Count; i++)
+        var added = _runner.LinesSince(_nextLine, out var next);
+        _nextLine = next;
+        if (added.Count > 0)
         {
-            Lines.Add(lines[i]);
+            foreach (var line in added)
+            {
+                Lines.Add(line);
+            }
+            while (Lines.Count > MaxShown)
+            {
+                Lines.RemoveAt(0);
+            }
+            HasHistory = true;
+            LinesAppended?.Invoke();
         }
-        _shownLines = lines.Count;
-        while (Lines.Count > 200)
+    }
+
+    private DateTimeOffset _shownStart;
+
+    [RelayCommand]
+    private void Cancel() => _runner.RequestCancel();
+
+    [RelayCommand]
+    private void CopyLog()
+    {
+        try
         {
-            Lines.RemoveAt(0);
+            System.Windows.Clipboard.SetText(string.Join(Environment.NewLine, Lines));
+        }
+        catch (Exception)
+        {
         }
     }
 
     [RelayCommand]
-    private void Cancel() => _runner.RequestCancel();
+    private void GoHome() => _navigation.Navigate(AppPage.Home);
 }

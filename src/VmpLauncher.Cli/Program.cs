@@ -27,6 +27,7 @@ internal static class Program
         root.Subcommands.Add(Commands.GameCommands.Build());
         root.Subcommands.Add(Commands.PolicyCommands.Build(dataDir));
         root.Subcommands.Add(Commands.NetCommands.Build());
+        root.Subcommands.Add(Commands.PrivateCommands.Build());
         foreach (var c in Commands.ReleaseCommands.Build(dataDir))
         {
             root.Subcommands.Add(c);

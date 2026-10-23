@@ -42,6 +42,12 @@ public enum ProbeOutcome
 
     /// <summary>Local failure (socket, bad input) or a connected server that never answered the handshake.</summary>
     Error,
+
+    /// <summary>
+    /// The VMP server is up but refused with "Server full" (all player slots taken). Lidgren sends this before it
+    /// looks at the password, so the password and build are unknown. Appended last so existing values keep their numbers.
+    /// </summary>
+    ServerFull,
 }
 
 /// <summary>Probe parameters. <see cref="Password"/> is never printed by <see cref="ToString"/>.</summary>
@@ -72,7 +78,7 @@ public sealed record ProbeResult(ProbeOutcome Outcome, TimeSpan? RoundTrip = nul
 
     /// <summary>True when a VMP server answered at all.</summary>
     public bool ServerAnswered => Outcome is ProbeOutcome.Online or ProbeOutcome.OnlineNoPassword or ProbeOutcome.PasswordOk
-        or ProbeOutcome.WrongPassword or ProbeOutcome.BuildReported or ProbeOutcome.Rejected;
+        or ProbeOutcome.WrongPassword or ProbeOutcome.BuildReported or ProbeOutcome.Rejected or ProbeOutcome.ServerFull;
 }
 
 public interface IServerProbe

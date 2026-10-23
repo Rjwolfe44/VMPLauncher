@@ -38,27 +38,37 @@ public sealed class ProfileSession : IDisposable
             throw new LauncherException(ErrorCode.GameNotFound, $"The profile's game folder {profile.GameDir} is not a valid KSP install (seed it first).");
         }
         Cache = new NetModuleCache(cacheDir);
-        VerifiedIndex = new VerifiedArtifactIndex(Path.Combine(cacheDir, "vmpl-verified.json"));
-
-        // Lock → CKAN modules → pack repository zip
-        Modules = lockDoc.Ckan.Modules.Select(RegistryLockBuilder.ToCkanModule).ToList();
-        var lockSha8 = Sha256Util.HashUtf8(string.Join("\n", lockDoc.Ckan.Modules.Select(m => m.MetadataSha256)))[..8];
-        var repoZip = PackRepoBuilder.Build(Modules, Path.Combine(profile.PackRepoDir, $"{lockSha8}.zip"));
-        PackRepo = new Repository($"vmpack-{lockDoc.Pack.Id}", new Uri(repoZip));
-        _repoData = new RepositoryDataManager(paths.CkanReposDir);
-
-        RegistryManager = RegistryManager.Instance(Instance, _repoData, new[] { PackRepo });
-        RegistryManager.registry.RepositoriesSet(new SortedDictionary<string, Repository> { [PackRepo.name] = PackRepo });
-        var downloader = new NetAsyncDownloader(user, () => SHA256.Create(), UserAgent);
-        var result = _repoData.Update(new[] { PackRepo }, Game, skipETags: true, downloader, user, UserAgent);
-        if (result == RepositoryDataManager.UpdateResult.Failed)
+        try
         {
-            throw new LauncherException(ErrorCode.InvalidLock, "CKAN could not load the pack's module metadata.");
+            VerifiedIndex = new VerifiedArtifactIndex(Path.Combine(cacheDir, "vmpl-verified.json"));
+
+            // Lock → CKAN modules → pack repository zip
+            Modules = lockDoc.Ckan.Modules.Select(RegistryLockBuilder.ToCkanModule).ToList();
+            var lockSha8 = Sha256Util.HashUtf8(string.Join("\n", lockDoc.Ckan.Modules.Select(m => m.MetadataSha256)))[..8];
+            var repoZip = PackRepoBuilder.Build(Modules, Path.Combine(profile.PackRepoDir, $"{lockSha8}.zip"));
+            PackRepo = new Repository($"vmpack-{lockDoc.Pack.Id}", new Uri(repoZip));
+            _repoData = new RepositoryDataManager(paths.CkanReposDir);
+
+            RegistryManager = RegistryManager.Instance(Instance, _repoData, new[] { PackRepo });
+            RegistryManager.registry.RepositoriesSet(new SortedDictionary<string, Repository> { [PackRepo.name] = PackRepo });
+            var downloader = new NetAsyncDownloader(user, () => SHA256.Create(), UserAgent);
+            var result = _repoData.Update(new[] { PackRepo }, Game, skipETags: true, downloader, user, UserAgent);
+            if (result == RepositoryDataManager.UpdateResult.Failed)
+            {
+                throw new LauncherException(ErrorCode.InvalidLock, "CKAN could not load the pack's module metadata.");
+            }
+            var compatible = lockDoc.Game.CompatibleGameVersions.Select(CKAN.Versioning.GameVersion.Parse).ToList();
+            if (compatible.Count > 0)
+            {
+                Instance.SetCompatibleVersions(compatible);
+            }
         }
-        var compatible = lockDoc.Game.CompatibleGameVersions.Select(CKAN.Versioning.GameVersion.Parse).ToList();
-        if (compatible.Count > 0)
+        catch
         {
-            Instance.SetCompatibleVersions(compatible);
+            // Nobody gets a session to dispose when construction fails: release CKAN's registry.locked here.
+            CKAN.RegistryManager.DisposeInstance(Instance);
+            Cache.Dispose();
+            throw;
         }
     }
 
@@ -278,6 +288,41 @@ public sealed class ProfileSession : IDisposable
         catch (Kraken ex)
         {
             throw new LauncherException(ErrorCode.InstallFailed, "CKAN could not remove the outdated modules.", RecoveryHint.Retry, ex, new[] { ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Lock modules (packages and metapackages) the registry does not list, e.g. auto-installed dependencies or reverse
+    /// dependencies CKAN removed along with the modules an update uninstalled.
+    /// </summary>
+    public IReadOnlyList<CkanModule> ModulesMissingFromRegistry()
+        => Lock.Ckan.Modules
+            .Where(lm => lm.Kind != ModuleKindDto.Dlc && Registry.InstalledModule(lm.Identifier) is null)
+            .Select(lm => Modules.First(m => m.identifier == lm.Identifier))
+            .ToList();
+
+    /// <summary>
+    /// Override targets against what CKAN actually installed: a replace or disable must hit a file its named owner
+    /// installed; an add must not hit a file any module installed.
+    /// </summary>
+    public void AssertOverrideTargets(IEnumerable<LockOverride> overrides)
+    {
+        var problems = new List<string>();
+        foreach (var o in overrides)
+        {
+            var owner = Registry.FileOwner(o.Path)?.identifier;
+            if (o.Op is "replace" or "disable" && !string.Equals(owner, o.Owner, StringComparison.Ordinal))
+            {
+                problems.Add($"override {o.Id} ({o.Op}) targets {o.Path}, which CKAN installed for {owner ?? "no module"}, not {o.Owner}");
+            }
+            else if (o.Op == "add" && owner is not null)
+            {
+                problems.Add($"override {o.Id} adds {o.Path}, which CKAN installed for {owner}");
+            }
+        }
+        if (problems.Count > 0)
+        {
+            throw new LauncherException(ErrorCode.InvalidLock, "The pack's overrides do not match the files CKAN installed.", RecoveryHint.AskHost, details: problems);
         }
     }
 

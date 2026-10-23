@@ -56,7 +56,10 @@ public static class SafeZip
         return new ScanResult(zip.Entries.Count, total);
     }
 
-    /// <summary>Extracts one entry to a temp file next to the destination, verifying the hash before the rename.</summary>
+    /// <summary>
+    /// Extracts one entry to a temp file next to the destination, verifying the hash before the rename.
+    /// A negative <paramref name="expectedSize"/> means the size is not known; the hash alone decides.
+    /// </summary>
     public static void ExtractEntryVerified(string zipPath, string entryName, string destination, string expectedSha256, long expectedSize)
     {
         using var zip = ZipFile.OpenRead(zipPath);
@@ -64,16 +67,17 @@ public static class SafeZip
                     ?? throw new LauncherException(ErrorCode.ArtifactCorrupt, $"Entry {entryName} not found in {Path.GetFileName(zipPath)}.");
         Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
         var tmp = destination + ".vmpl-tmp";
+        var sizeKnown = expectedSize >= 0;
         try
         {
             using (var src = entry.Open())
             using (var dst = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None))
             {
-                CopyBounded(src, dst, expectedSize + 1);
+                CopyBounded(src, dst, sizeKnown ? expectedSize + 1 : Math.Min(entry.Length, MaxTotalBytes) + 1);
             }
             var fi = new FileInfo(tmp);
             var sha = Sha256Util.HashFile(tmp);
-            if (fi.Length != expectedSize || !Sha256Util.HexEquals(sha, expectedSha256))
+            if ((sizeKnown && fi.Length != expectedSize) || !Sha256Util.HexEquals(sha, expectedSha256))
             {
                 throw new LauncherException(ErrorCode.ArtifactCorrupt, $"{entryName} in {Path.GetFileName(zipPath)} does not match the pack's hash.");
             }

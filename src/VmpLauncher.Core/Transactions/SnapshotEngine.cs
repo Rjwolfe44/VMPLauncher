@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using VmpLauncher.Core.Packs;
 using VmpLauncher.Core.Profiles;
+using VmpLauncher.Core.Security;
 using VmpLauncher.Core.Serialization;
 
 namespace VmpLauncher.Core.Transactions;
@@ -18,7 +19,11 @@ public static class SnapshotEngine
 
     private static readonly string[] CkanStateFiles = { "registry.json", "compatible_ksp_versions.json" };
 
-    public static SnapshotManifest Create(ProfilePaths profile, FileRules rules, string txnId, IEnumerable<string>? extraRootFiles, CancellationToken ct = default)
+    /// <param name="rootFiles">
+    /// Pack-owned files directly in the game folder (from the inventories before and after the transaction). Those that
+    /// exist are snapshotted; all are recorded so a restore can quarantine the ones the transaction created.
+    /// </param>
+    public static SnapshotManifest Create(ProfilePaths profile, FileRules rules, string txnId, IEnumerable<string>? rootFiles, CancellationToken ct = default)
     {
         var sw = Stopwatch.StartNew();
         var ruleSet = new FileRuleSet(rules);
@@ -28,14 +33,26 @@ public static class SnapshotEngine
         var entries = new List<SnapshotEntry>();
         var isWindows = OperatingSystem.IsWindows();
 
-        IEnumerable<string> files = ManagedRoots
+        // Junctions and symbolic links are neither followed nor recorded: their targets are not the profile's files.
+        var enumeration = SafePath.RecurseSkippingReparsePoints();
+        var managed = ManagedRoots
             .Select(r => Path.Combine(profile.GameDir, r))
-            .Where(Directory.Exists)
-            .SelectMany(r => Directory.EnumerateFiles(r, "*", SearchOption.AllDirectories));
-        foreach (var extra in extraRootFiles ?? Array.Empty<string>())
+            .Where(d => Directory.Exists(d) && !SafePath.IsReparsePoint(d))
+            .ToList();
+        var directories = managed
+            .SelectMany(r => Directory.EnumerateDirectories(r, "*", enumeration))
+            .Select(d => Path.GetRelativePath(profile.GameDir, d).Replace('\\', '/'))
+            .ToList();
+        IEnumerable<string> files = managed.SelectMany(r => Directory.EnumerateFiles(r, "*", enumeration));
+        var roots = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var candidate in rootFiles ?? Array.Empty<string>())
         {
-            var abs = Path.Combine(profile.GameDir, extra);
-            if (File.Exists(abs))
+            if (!SafePath.TryNormalize(candidate, out var rel, out _) || rel.Contains('/') || !roots.Add(rel))
+            {
+                continue;
+            }
+            var abs = Path.Combine(profile.GameDir, rel);
+            if (File.Exists(abs) && !SafePath.IsReparsePoint(abs))
             {
                 files = files.Append(abs);
             }
@@ -92,7 +109,11 @@ public static class SnapshotEngine
             }
         }
 
-        var manifest = new SnapshotManifest { TxnId = txnId, Utc = DateTimeOffset.UtcNow, Files = entries, CopiedStateFiles = copied };
+        var manifest = new SnapshotManifest
+        {
+            TxnId = txnId, Utc = DateTimeOffset.UtcNow, Files = entries, CopiedStateFiles = copied,
+            Rules = rules, RootFiles = roots.ToList(), Directories = directories,
+        };
         LauncherJson.WriteFile(Path.Combine(snapDir, "manifest.json"), manifest);
         Debug.WriteLine($"snapshot {txnId}: {entries.Count} files in {sw.Elapsed}");
         return manifest;

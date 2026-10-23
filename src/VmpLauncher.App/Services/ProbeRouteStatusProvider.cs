@@ -22,6 +22,7 @@ public sealed class ProbeRouteStatusProvider : IRouteStatusProvider
             ProbeOutcome.OnlineNoPassword => ("Online (no password)", "ok", rtt),
             ProbeOutcome.Unreachable => route.Kind == "zerotier" ? ("Unreachable (ZeroTier joined?)", "error", string.Empty) : ("Unreachable", "error", string.Empty),
             ProbeOutcome.AddressNotFound => ("Address not found", "warn", string.Empty),
+            ProbeOutcome.ServerFull => ("Online, but full", "warn", rtt),
             _ => (result.Outcome.ToString(), "warn", rtt),
         };
     }

@@ -3,7 +3,7 @@ using VmpLauncher.App.ViewModels;
 
 namespace VmpLauncher.App.Views.Pages;
 
-public partial class SettingsPage : Page
+public partial class SettingsPage : UserControl
 {
     public SettingsPage(SettingsViewModel viewModel)
     {

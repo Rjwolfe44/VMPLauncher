@@ -34,13 +34,14 @@ public class ConnectionDoctorTests
     private static ServerDirectoryResult Servers(string? json = null)
         => new(ServerDirectory.Parse(Encoding.UTF8.GetBytes(json ?? ServerDirectoryTests.Json(4))), false, DateTimeOffset.UtcNow, TimeSpan.FromMinutes(5), "test-key");
 
-    private static ConnectionDoctorOptions Options(ScriptedProbe probe, string? password = Secret, string? installed = "0.2.0-train.20261021.1", ZeroTierState zt = ZeroTierState.Joined) => new()
+    private static ConnectionDoctorOptions Options(ScriptedProbe probe, string? password = Secret, string? installed = "0.2.0-train.20261021.1", ZeroTierState zt = ZeroTierState.Joined,
+        string? json = null, Func<string?>? installedBuild = null) => new()
     {
-        LoadServers = _ => Task.FromResult(Servers()),
+        LoadServers = _ => Task.FromResult(Servers(json)),
         Probe = probe,
         ZeroTier = new FixedZeroTier(new ZeroTierStatus(zt, zt == ZeroTierState.Joined ? IPAddress.Parse("10.37.239.7") : null, "fake")),
         PasswordProvider = _ => ValueTask.FromResult(password),
-        InstalledBuild = () => installed,
+        InstalledBuild = installedBuild ?? (() => installed),
         Resolve = (h, _) => Task.FromResult(new[] { IPAddress.Parse("147.185.221.216") }),
         BindUdp = () => 50000,
     };
@@ -125,6 +126,88 @@ public class ConnectionDoctorTests
         Assert.Contains(d.Results, s => s.Fix == DoctorFix.EnterPassword && s.Status == DoctorStatus.Warn);
     }
 
+    private static string PasswordNotRequiredJson() => ServerDirectoryTests.Json(4).Replace("\"passwordRequired\": true", "\"passwordRequired\": false", StringComparison.Ordinal);
+
+    [Fact]
+    public async Task Online_L1_proves_a_password_is_required_even_when_the_server_list_says_it_is_not()
+    {
+        // Online = the server refused our random sentinel password, whatever servers.json claims.
+        var probe = new ScriptedProbe { Script = _ => new ProbeResult(ProbeOutcome.Online, TimeSpan.FromMilliseconds(30), Reason: "Invalid password") };
+        var d = new ConnectionDoctor(Options(probe, password: null, json: PasswordNotRequiredJson()));
+        await Run(d);
+
+        var warned = d.Results.Where(s => s.Fix == DoctorFix.EnterPassword).ToList();
+        var single = Assert.Single(warned); // warned once, not per route
+        Assert.Equal(DoctorStatus.Warn, single.Status);
+        Assert.Contains("No saved password", single.Summary);
+        Assert.All(probe.Calls, c => Assert.Equal(ProbeLevel.Reachability, c.Level));
+    }
+
+    [Fact]
+    public async Task Accepting_any_password_with_passwordRequired_false_does_not_ask_for_a_password()
+    {
+        var probe = new ScriptedProbe { Script = _ => new ProbeResult(ProbeOutcome.OnlineNoPassword, TimeSpan.FromMilliseconds(30)) };
+        var d = new ConnectionDoctor(Options(probe, password: null, json: PasswordNotRequiredJson()));
+        await Run(d);
+        Assert.DoesNotContain(d.Results, s => s.Fix == DoctorFix.EnterPassword);
+        Assert.Contains(d.Results, s => s.Id.EndsWith(".password", StringComparison.Ordinal) && s.Status == DoctorStatus.Skipped);
+    }
+
+    [Fact]
+    public async Task Full_server_is_a_warning_that_says_try_again_later_and_never_claims_it_is_not_VMP()
+    {
+        var probe = new ScriptedProbe { Script = _ => new ProbeResult(ProbeOutcome.ServerFull, Reason: "Server full") };
+        var d = new ConnectionDoctor(Options(probe));
+        await Run(d);
+
+        var reach = d.Results.Single(s => s.Id == "route.playit.reach");
+        Assert.Equal(DoctorStatus.Warn, reach.Status);
+        Assert.Contains("full", reach.Summary);
+        Assert.Contains("try again later", reach.Summary, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("VMP server", reach.Summary);
+        Assert.DoesNotContain(d.Results, s => s.Summary.Contains("didn't behave like", StringComparison.Ordinal));
+        Assert.DoesNotContain(probe.Calls, c => c.Level != ProbeLevel.Reachability); // a full server cannot answer the password/build checks
+    }
+
+    [Fact]
+    public async Task Unreadable_installed_client_is_reported_not_thrown()
+    {
+        var probe = new ScriptedProbe { Script = _ => new ProbeResult(ProbeOutcome.Unreachable) };
+        var d = new ConnectionDoctor(Options(probe, installedBuild: () => throw new BadImageFormatException("Bad IL format.")));
+        await Run(d);
+
+        var compare = d.Results.Single(s => s.Id == "build.compare");
+        Assert.Equal(DoctorStatus.Warn, compare.Status);
+        Assert.Equal(DoctorFix.UpdatePack, compare.Fix);
+        Assert.Contains("VMP client unreadable: update or repair the pack", compare.Summary);
+        Assert.Contains("Bad IL format.", compare.Details);
+        Assert.Contains(d.Results, s => s.Id == "dns.internet"); // the rest of the run completed
+    }
+
+    [Theory]
+    [InlineData(typeof(InvalidOperationException))]
+    [InlineData(typeof(IOException))]
+    [InlineData(typeof(UnauthorizedAccessException))]
+    [InlineData(typeof(InvalidDataException))]
+    public async Task Other_read_failures_of_the_installed_client_are_also_reported(Type exceptionType)
+    {
+        var probe = new ScriptedProbe { Script = _ => new ProbeResult(ProbeOutcome.Unreachable) };
+        var d = new ConnectionDoctor(Options(probe, installedBuild: () => throw (Exception)Activator.CreateInstance(exceptionType, "boom")!));
+        await Run(d);
+        Assert.Contains("unreadable", d.Results.Single(s => s.Id == "build.compare").Summary);
+    }
+
+    [Fact]
+    public async Task Missing_installed_client_still_says_not_found_or_damaged()
+    {
+        var probe = new ScriptedProbe { Script = _ => new ProbeResult(ProbeOutcome.Unreachable) };
+        var d = new ConnectionDoctor(Options(probe, installed: null));
+        await Run(d);
+        var compare = d.Results.Single(s => s.Id == "build.compare");
+        Assert.Equal(DoctorStatus.Warn, compare.Status);
+        Assert.Equal(DoctorFix.UpdatePack, compare.Fix);
+    }
+
     [Fact]
     public async Task Failures_in_dns_udp_and_server_list_are_steps_not_exceptions()
     {
@@ -174,6 +257,37 @@ public class ConnectionDoctorTests
         Assert.DoesNotContain(profile, text, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Someone", text);
         Assert.Contains("pw=" + ReportRedactor.Redacted, text);
+    }
+
+    [Theory]
+    [InlineData(@"log at C:\Users\John Smith\AppData\Local\x.log", @"log at %USERPROFILE%\AppData\Local\x.log")]
+    [InlineData("log at C:/Users/John Smith/AppData/x.log", "log at %USERPROFILE%/AppData/x.log")]
+    [InlineData(@"{""path"":""C:\\Users\\John Smith\\AppData\\x.log""}", @"{""path"":""%USERPROFILE%\\AppData\\x.log""}")]
+    [InlineData(@"open ""C:\Users\John Smith"" failed", @"open ""%USERPROFILE%"" failed")]
+    [InlineData(@"| WARN | C:\Users\John Smith | next |", "| WARN | %USERPROFILE% | next |")]
+    [InlineData(@"at D:\Users\Mary Ann Lee\Desktop", @"at %USERPROFILE%\Desktop")]
+    [InlineData(@"error at C:\Users\John Smith", "error at %USERPROFILE%")]
+    [InlineData(@"C:\Users\Chevy\x and C:\Users\Dana Scully\y", @"%USERPROFILE%\x and %USERPROFILE%\y")]
+    public void Redactor_hides_user_names_that_contain_spaces(string input, string expected)
+    {
+        var text = ReportRedactor.Redact(input);
+        Assert.Equal(expected, text);
+        Assert.DoesNotContain("Smith", text);
+        Assert.DoesNotContain("Scully", text);
+    }
+
+    [Fact]
+    public void Redactor_hides_the_real_profile_in_forward_slash_and_doubled_backslash_forms()
+    {
+        var profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var forward = profile.Replace('\\', '/');
+        var doubled = profile.Replace("\\", "\\\\", StringComparison.Ordinal);
+        var text = ReportRedactor.Redact($"a {forward}/x b \"{doubled}\\\\y\" c {profile}\\z");
+
+        Assert.DoesNotContain(profile, text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(forward, text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(doubled, text, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(3, text.Split("%USERPROFILE%").Length - 1);
     }
 
     [Fact]

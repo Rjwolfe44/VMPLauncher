@@ -66,10 +66,10 @@ public sealed class ExternalTools
     public RunResult Git(string repoDir, params string[] args) => Run("git", new[] { "-C", repoDir }.Concat(args).ToList());
 
     /// <summary>Run a PowerShell script on an SSH host as an encoded command (no quoting hazards, no forwardings).</summary>
-    public RunResult SshPowerShell(string host, string script, bool throwOnError = true)
+    public RunResult SshPowerShell(string host, string script, bool throwOnError = true, TimeSpan? timeout = null)
     {
         var encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(script));
-        return Run("ssh", new[] { "-T", "-o", "BatchMode=yes", "-o", "ClearAllForwardings=yes", host, "powershell.exe", "-NoProfile", "-EncodedCommand", encoded }, throwOnError: throwOnError, timeout: TimeSpan.FromMinutes(5));
+        return Run("ssh", new[] { "-T", "-o", "BatchMode=yes", "-o", "ClearAllForwardings=yes", "-o", "ServerAliveInterval=30", host, "powershell.exe", "-NoProfile", "-EncodedCommand", encoded }, throwOnError: throwOnError, timeout: timeout ?? TimeSpan.FromMinutes(5));
     }
 
     public RunResult Scp(string localFile, string host, string remotePath)

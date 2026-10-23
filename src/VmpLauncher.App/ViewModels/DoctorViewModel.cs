@@ -7,7 +7,6 @@ using VmpLauncher.App.Services;
 using VmpLauncher.Core;
 using VmpLauncher.Net.Directory;
 using VmpLauncher.Net.Doctor;
-using Wpf.Ui;
 
 namespace VmpLauncher.App.ViewModels;
 
@@ -27,13 +26,13 @@ public partial class DoctorViewModel : ObservableObject
 {
     private readonly LauncherService _launcher;
     private readonly ISecretStore _secrets;
-    private readonly INavigationService _navigation;
+    private readonly IAppNavigator _navigation;
     private readonly LauncherPaths _paths;
     private readonly ILogger<DoctorViewModel> _log;
     private ConnectionDoctor? _lastDoctor;
     private static readonly System.Net.Http.HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(8) };
 
-    public DoctorViewModel(LauncherService launcher, ISecretStore secrets, INavigationService navigation, LauncherPaths paths, ILogger<DoctorViewModel> log)
+    public DoctorViewModel(LauncherService launcher, ISecretStore secrets, IAppNavigator navigation, LauncherPaths paths, ILogger<DoctorViewModel> log)
     {
         _launcher = launcher;
         _secrets = secrets;
@@ -45,7 +44,8 @@ public partial class DoctorViewModel : ObservableObject
     public ObservableCollection<DoctorStepViewModel> Steps { get; } = new();
 
     [ObservableProperty] private bool _isRunning;
-    [ObservableProperty] private string _headline = "Run the checks to see how your PC reaches the server.";
+    [ObservableProperty] private string _headline = "Checks your internet, the server routes, your password and your game files, and says what to fix.";
+    [ObservableProperty] private string _headlineKind = "neutral";
     [ObservableProperty] private bool _hasReport;
     [ObservableProperty] private UserFacingError? _error;
 
@@ -57,6 +57,7 @@ public partial class DoctorViewModel : ObservableObject
         IsRunning = true;
         HasReport = false;
         Headline = "Checking…";
+        HeadlineKind = "checking";
         try
         {
             var pack = _launcher.CurrentPack ?? await _launcher.RefreshPackAsync(ct);
@@ -111,9 +112,12 @@ public partial class DoctorViewModel : ObservableObject
             }
             var fails = Steps.Count(s => s.StatusKind == "error");
             var warns = Steps.Count(s => s.StatusKind == "warn");
+            var flagged = Steps.Where(s => s.StatusKind is "error" or "warn").Select(s => s.Title).ToList();
+            var list = flagged.Count == 0 ? string.Empty : ": " + string.Join(", ", flagged.Take(3)) + (flagged.Count > 3 ? ", ..." : string.Empty);
             Headline = fails == 0 && warns == 0 ? "Everything looks good. You should be able to join."
-                     : fails == 0 ? $"Playable, with {warns} thing(s) worth a look."
-                     : $"{fails} problem(s) will stop you from joining.";
+                     : fails == 0 ? $"Playable. {Plural(warns, "thing")} worth a look{list}."
+                     : $"{Plural(fails, "problem")} will stop you from joining{list}.";
+            HeadlineKind = fails > 0 ? "error" : warns > 0 ? "warn" : "ok";
             HasReport = true;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -121,12 +125,15 @@ public partial class DoctorViewModel : ObservableObject
             _log.LogError(ex, "Doctor failed");
             Error = ErrorCatalog.From(ex);
             Headline = "The checks could not run.";
+            HeadlineKind = "error";
         }
         finally
         {
             IsRunning = false;
         }
     }
+
+    private static string Plural(int n, string word) => n == 1 ? $"1 {word}" : $"{n} {word}s";
 
     private static ServerDirectory BuildDirectoryFromPack(ResolvedPack? pack)
     {
@@ -157,10 +164,10 @@ public partial class DoctorViewModel : ObservableObject
         switch (step.Fix)
         {
             case DoctorFix.EnterPassword:
-                _navigation.Navigate(typeof(Views.Pages.PlayPage));
+                _navigation.Navigate(AppPage.Play);
                 break;
             case DoctorFix.UpdatePack:
-                _navigation.Navigate(typeof(Views.Pages.HomePage));
+                _navigation.Navigate(AppPage.Home);
                 break;
             case DoctorFix.InstallZeroTier:
                 System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("https://www.zerotier.com/download/") { UseShellExecute = true });

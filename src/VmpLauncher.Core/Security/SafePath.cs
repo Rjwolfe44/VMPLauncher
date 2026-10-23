@@ -117,6 +117,42 @@ public static class SafePath
         }
         return false;
     }
+
+    /// <summary>True when the file or directory itself is a reparse point (junction, symbolic link). False when it does not exist.</summary>
+    public static bool IsReparsePoint(string path)
+    {
+        try
+        {
+            return (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Recursive enumeration that neither returns nor descends into reparse points, so a junction inside a game folder
+    /// never leads the launcher to snapshot, quarantine or delete files elsewhere on the disk.
+    /// </summary>
+    public static EnumerationOptions RecurseSkippingReparsePoints() => new()
+    {
+        RecurseSubdirectories = true,
+        AttributesToSkip = FileAttributes.ReparsePoint,
+        IgnoreInaccessible = false,
+        MatchType = MatchType.Win32,
+        ReturnSpecialDirectories = false,
+    };
+
+    /// <summary>Throws when a directory between <paramref name="root"/> and <paramref name="fullPath"/> is a reparse point.</summary>
+    public static void ThrowIfReparsePointAbove(string root, string fullPath, string relativePath)
+    {
+        if (HasReparsePointAbove(root, fullPath))
+        {
+            throw new Diagnostics.LauncherException(Diagnostics.ErrorCode.UnsafePath,
+                $"A folder on the path {relativePath} is a junction or symbolic link; the launcher does not write through those.", Diagnostics.RecoveryHint.None);
+        }
+    }
 }
 
 public sealed class UnsafePathException(string path, string reason)

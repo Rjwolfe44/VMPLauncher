@@ -4,16 +4,20 @@ using VmpLauncher.App.ViewModels;
 
 namespace VmpLauncher.App.Views.Pages;
 
-public partial class HomePage : Page
+public partial class HomePage : UserControl
 {
     public HomePage(HomeViewModel viewModel)
     {
         ViewModel = viewModel;
         DataContext = viewModel;
         InitializeComponent();
-        Loaded += async (_, _) => await ViewModel.RefreshCommand.ExecuteAsync(null);
+        Loaded += async (_, _) => await ViewModel.OnShownAsync();
         Drop += OnDrop;
-        DragOver += (_, e) => { e.Effects = e.Data.GetDataPresent(DataFormats.FileDrop) ? DragDropEffects.Copy : DragDropEffects.None; e.Handled = true; };
+        DragOver += (_, e) =>
+        {
+            e.Effects = e.Data.GetDataPresent(DataFormats.FileDrop) ? DragDropEffects.Copy : DragDropEffects.None;
+            e.Handled = true;
+        };
     }
 
     public HomeViewModel ViewModel { get; }

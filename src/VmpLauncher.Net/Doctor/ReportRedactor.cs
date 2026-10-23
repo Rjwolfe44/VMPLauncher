@@ -6,6 +6,7 @@ namespace VmpLauncher.Net.Doctor;
 public static partial class ReportRedactor
 {
     public const string Redacted = "[redacted]";
+    private const string ProfileToken = "%USERPROFILE%";
 
     public static string Redact(string? text, IEnumerable<string?>? secrets = null)
     {
@@ -20,12 +21,30 @@ public static partial class ReportRedactor
         var profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         if (!string.IsNullOrEmpty(profile) && profile.Length > 3)
         {
-            text = text.Replace(profile, "%USERPROFILE%", StringComparison.OrdinalIgnoreCase);
+            foreach (var form in ProfileForms(profile))
+            {
+                text = text.Replace(form, ProfileToken, StringComparison.OrdinalIgnoreCase);
+            }
         }
         // Any other C:\Users\<name> (other drives/accounts, forward slashes, escaped JSON backslashes).
-        return UserDirRegex().Replace(text, "%USERPROFILE%");
+        return UserDirRegex().Replace(text, ProfileToken);
     }
 
-    [GeneratedRegex(@"[A-Za-z]:(\\\\|\\|/)Users(\\\\|\\|/)[^\\/\s""'<>|:*?]+", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    /// <summary>The profile path as it appears in plain text, with forward slashes, and JSON/C#-escaped (doubled backslashes); longest first.</summary>
+    private static IEnumerable<string> ProfileForms(string profile)
+    {
+        var trimmed = profile.TrimEnd('\\', '/');
+        var forms = new[]
+        {
+            trimmed.Replace("\\", "\\\\", StringComparison.Ordinal),
+            trimmed,
+            trimmed.Replace('\\', '/'),
+        };
+        return forms.Where(f => f.Length > 3).Distinct(StringComparer.OrdinalIgnoreCase);
+    }
+
+    // C:\Users\<name> where <name> may contain spaces ("John Smith"): it runs lazily up to the next path separator, quote
+    // or other character that cannot be part of a folder name, or to the end of the line. Trailing spaces stay outside.
+    [GeneratedRegex(@"[A-Za-z]:(?:\\\\|\\|/)Users(?:\\\\|\\|/)[^\\/\r\n""'<>|:*?]{1,255}?(?=\s*(?:[\\/""'<>|:*?]|\r|\n|\z))", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex UserDirRegex();
 }

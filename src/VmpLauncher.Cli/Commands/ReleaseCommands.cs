@@ -191,7 +191,7 @@ internal static class ReleaseCommands
     private static Command PolicyUpdateCommand()
     {
         var policy = new Option<string>("--policy") { Description = "Current KSPModControl.xml.", Required = true };
-        var game = new Option<string>("--game") { Description = "KSP folder whose GameData DLLs are the truth.", Required = true };
+        var game = new Option<string?>("--game") { Description = "KSP folder whose GameData DLLs are the truth (not needed with --generated)." };
         var generated = new Option<string?>("--generated") { Description = "Normalize this in-game generated file instead of patching --policy." };
         var output = new Option<string?>("--out") { Description = "Output path (default: overwrite --policy)." };
         var update = new Command("update", "Re-hash the policy's DLL list against a GameData folder (or normalize an in-game file)") { policy, game, generated, output };
@@ -200,12 +200,18 @@ internal static class ReleaseCommands
             var outPath = parse.GetValue(output) ?? parse.GetValue(policy)!;
             try
             {
+                if (parse.GetValue(generated) is null && parse.GetValue(game) is null)
+                {
+                    Console.Error.WriteLine("--game is required unless --generated is given.");
+                    return 2;
+                }
                 var r = parse.GetValue(generated) is { } g
                     ? ModControlPatcher.Normalize(g, outPath)
                     : ModControlPatcher.Patch(parse.GetValue(policy)!, parse.GetValue(game)!, outPath);
+                static string Short(string? sha) => string.IsNullOrEmpty(sha) ? "(none)" : sha[..Math.Min(8, sha.Length)] + "...";
                 foreach (var ch in r.Changes)
                 {
-                    Console.WriteLine($"  {ch.Kind,-8} {ch.Path}{(ch.Kind == "updated" ? $"  {ch.OldSha?[..8]}... -> {ch.NewSha?[..8]}..." : "")}");
+                    Console.WriteLine($"  {ch.Kind,-8} {ch.Path}{(ch.Kind == "updated" ? $"  {Short(ch.OldSha)} -> {Short(ch.NewSha)}" : "")}");
                 }
                 Console.WriteLine($"{r.Summary} -> {r.OutputPath}");
                 if (r.StructureChanged)

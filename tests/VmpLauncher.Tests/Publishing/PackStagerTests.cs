@@ -97,6 +97,52 @@ public sealed class PackStagerTests : IDisposable
     }
 
     [Fact]
+    public void Rebuilt_custom_package_with_the_same_file_name_is_refused()
+    {
+        var v1 = Lock("1.0.0", ("A", "1.0", "aaa"), ("VMPCustom-Client", "0.1", "ccc"));
+        var e1 = WriteExport(v1);
+        new PackStager().Stage(new PackStager.Request(_repo, e1.VersionDir, e1.ChannelFile, v1, null, "unchanged", _key, null, Now));
+
+        // Same client version (so the same download name) but different bytes: the old asset would stay online.
+        var v2 = Lock("1.0.1", ("A", "1.0", "aaa"), ("VMPCustom-Client", "0.1", "different"));
+        var e2 = WriteExport(v2);
+        var ex = Assert.Throws<LauncherException>(() => new PackStager().Stage(new PackStager.Request(_repo, e2.VersionDir, e2.ChannelFile, v2, null, "unchanged", _key, null, Now)));
+        Assert.Contains("without a new version", ex.Message, StringComparison.Ordinal);
+        Assert.False(Directory.Exists(Path.Combine(_repo, "packs", "p", "1.0.1")), "nothing staged");
+    }
+
+    [Fact]
+    public void A_published_version_folder_is_never_overwritten()
+    {
+        var v1 = Lock("1.0.0", ("A", "1.0", "aaa"), ("VMPCustom-Client", "0.1", "ccc"));
+        var e1 = WriteExport(v1);
+        new PackStager().Stage(new PackStager.Request(_repo, e1.VersionDir, e1.ChannelFile, v1, null, "unchanged", _key, null, Now));
+        var v2 = Lock("1.0.1", ("A", "1.1", "aa2"), ("VMPCustom-Client", "0.1", "ccc"));
+        var e2 = WriteExport(v2);
+        new PackStager().Stage(new PackStager.Request(_repo, e2.VersionDir, e2.ChannelFile, v2, null, "unchanged", _key, null, Now));
+
+        // Re-publishing the older 1.0.0 (e.g. --version 1.0.0) must not rewrite what friends may have installed.
+        var e3 = WriteExport(v1, suffix: "old");
+        Assert.Throws<LauncherException>(() => new PackStager().Stage(new PackStager.Request(_repo, e3.VersionDir, e3.ChannelFile, v1, null, "unchanged", _key, null, Now)));
+    }
+
+    [Fact]
+    public void Rewritten_servers_json_uses_lf_line_endings()
+    {
+        var v1 = Lock("1.0.0", ("A", "1.0", "aaa"), ("VMPCustom-Client", "0.1", "ccc"));
+        var e1 = WriteExport(v1);
+        new PackStager().Stage(new PackStager.Request(_repo, e1.VersionDir, e1.ChannelFile, v1, null, "unchanged", _key, null, Now));
+        var servers = Path.Combine(_repo, "packs", "p", "servers.json");
+        File.WriteAllText(servers, "{\"sequence\":1,\"server\":{\"requiredBuild\":\"0.0\"}}\n");
+        var v2 = Lock("1.0.1", ("A", "1.0", "aaa"), ("VMPCustom-Client", "0.2", "ccd"));
+        var e2 = WriteExport(v2);
+        new PackStager().Stage(new PackStager.Request(_repo, e2.VersionDir, e2.ChannelFile, v2, null, "unchanged", _key, null, Now));
+        var text = File.ReadAllText(servers);
+        Assert.DoesNotContain("\r\n", text, StringComparison.Ordinal);
+        Assert.Contains("\"requiredBuild\": \"0.2\"", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void NextVersion_counts_per_day()
     {
         var packDir = Path.Combine(_root, "pd");
@@ -119,6 +165,8 @@ public sealed class PackStagerTests : IDisposable
         var start = script.IndexOf("-Action Start", StringComparison.Ordinal);
         Assert.True(backup >= 0 && backup < stop && stop < start, "backup, then stop, then start");
         Assert.Contains("finally", script, StringComparison.Ordinal);
+        Assert.True(script.IndexOf("try {", StringComparison.Ordinal) < backup, "backup and stop run inside the try whose finally restarts the server");
+        Assert.Contains("-Action Stop -ServerRoot $root", script, StringComparison.Ordinal);
         Assert.Contains("Server.exe is not running after start", script, StringComparison.Ordinal);
     }
 
@@ -139,7 +187,7 @@ public sealed class PackStagerTests : IDisposable
                     Origin = m.Id.StartsWith("VMPCustom", StringComparison.Ordinal) ? ModuleOrigin.Custom : ModuleOrigin.CkanMeta,
                     MetadataSha256 = Sha256Util.HashUtf8(m.Id + m.Version),
                     Metadata = meta,
-                    Artifact = new ArtifactRef { Sha256 = Sha256Util.HashUtf8(m.Sha), Size = 3, FileName = m.Id + ".zip", Urls = new[] { "https://example.test/" + m.Id + ".zip" } },
+                    Artifact = new ArtifactRef { Sha256 = Sha256Util.HashUtf8(m.Sha), Size = 3, FileName = $"{m.Id}-{m.Version}.zip", Urls = new[] { $"https://example.test/{m.Id}-{m.Version}.zip" } },
                 }).ToList(),
             },
             Inventory = new InventoryRef { Sha256 = Sha256Util.HashUtf8("inv" + version), FileCount = 1, TotalBytes = 3, MaxRelPathLength = 10 },

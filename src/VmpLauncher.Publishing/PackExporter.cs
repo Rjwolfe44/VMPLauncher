@@ -30,7 +30,11 @@ public sealed class PackExporter
         string? PolicyFile,
         string? PrivateConnectionFile,
         PublisherKey? SigningKey,
-        string? VersionOverride);
+        string? VersionOverride)
+    {
+        /// <summary>More secrets the scan must never find in the output (e.g. the private-mods access tokens).</summary>
+        public IReadOnlyList<string> ExtraSecrets { get; init; } = Array.Empty<string>();
+    }
 
     public sealed record Report(string VersionDir, string LockPath, IReadOnlyList<string> ReleaseAssets, IReadOnlyList<string> SideloadAssets, HostCapture.Result Capture, IReadOnlyList<string> Warnings, TimeSpan Elapsed);
 
@@ -74,10 +78,10 @@ public sealed class PackExporter
         foreach (var src in pack.CustomPackages)
         {
             ct.ThrowIfCancellationRequested();
-            var isSideload = src.Distribution.Kind == "private-sideload";
+            var isSideload = CustomPackageBuilder.IsPrivate(src.Distribution.Kind);
             var built = CustomPackageBuilder.Build(src, packDir, isSideload ? sideloadDir : assetsDir, r.AllowDirty || isSideload);
             warnings.AddRange(built.Warnings);
-            _log.WriteLine($"Custom package {built.Source.Id} {built.Version}: {built.FileName} ({built.Size:N0} bytes, {built.InstallSize:N0} installed){(isSideload ? " [private sideload]" : "")}");
+            _log.WriteLine($"Custom package {built.Source.Id} {built.Version}: {built.FileName} ({built.Size:N0} bytes, {built.InstallSize:N0} installed){(isSideload ? $" [private: {src.Distribution.Kind}]" : "")}");
             customModules.Add(built.Locked);
             foreach (var ef in indexer.Index(built.Module, built.ZipPath, built.Locked.MetadataSha256, ct))
             {
@@ -106,10 +110,13 @@ public sealed class PackExporter
         }
 
         // 4. Lock + inventory. The pack definition shipped with the version carries the version actually built.
+        // Host-only server presets (exportable: false, e.g. the LAN address) never leave this PC.
         var packCopy = Path.Combine(versionDir, Path.GetFileName(r.PackFile));
-        if (r.VersionOverride is not null)
+        var hostOnly = pack.Multiplayer.Servers.Any(s => !s.Exportable);
+        if (r.VersionOverride is not null || hostOnly)
         {
-            LauncherJson.WriteFile(packCopy, pack);
+            var shipped = hostOnly ? pack with { Multiplayer = pack.Multiplayer with { Servers = pack.Multiplayer.Servers.Where(s => s.Exportable).ToList() } } : pack;
+            LauncherJson.WriteFile(packCopy, shipped);
         }
         else
         {
@@ -123,9 +130,21 @@ public sealed class PackExporter
         // 5. Sanitized client settings template (allow-list built, never copied from the real file).
         WriteSettingsTemplate(Path.Combine(versionDir, "client-settings-template.xml"), pack);
 
-        // 6. Secret scan over everything we are about to hand out.
+        if (r.SigningKey is null)
+        {
+            warnings.Add("No signing key: lock and channel are unsigned (friends will see 'Unverified pack').");
+        }
+
+        // 6. Capture report (written before the scan so the scan covers it too).
+        WriteCaptureReport(Path.Combine(versionDir, "capture-report.md"), pack, capture, warnings);
+
+        // 7. Secret scan over everything we are about to hand out.
         var scanner = new SecretScanner();
         scanner.LoadFromHost(VmpSettingsFile.PathFor(r.HostKspDir), r.PrivateConnectionFile);
+        foreach (var s in r.ExtraSecrets)
+        {
+            scanner.Add(s, "private repository token");
+        }
         var findings = scanner.ScanDirectory(versionDir);
         if (findings.Count > 0)
         {
@@ -134,7 +153,7 @@ public sealed class PackExporter
         }
         _log.WriteLine($"Secret scan: clean ({scanner.NeedleCount} needles).");
 
-        // 7. Signatures + channel pointer.
+        // 8. Signatures + channel pointer.
         if (r.SigningKey is not null)
         {
             r.SigningKey.SignFile(gen.LockPath);
@@ -143,12 +162,11 @@ public sealed class PackExporter
             LauncherJson.WriteFile(channelPath, channel);
             r.SigningKey.SignFile(channelPath);
         }
-        else
-        {
-            warnings.Add("No signing key: lock and channel are unsigned (friends will see 'Unverified pack').");
-        }
+        return new Report(versionDir, gen.LockPath, releaseAssets, sideloadAssets, capture, warnings, sw.Elapsed);
+    }
 
-        // 8. Capture report.
+    private static void WriteCaptureReport(string path, PackDefinition pack, HostCapture.Result capture, List<string> warnings)
+    {
         var report = new StringBuilder();
         report.AppendLine($"# Capture report {pack.Id} {pack.Version}");
         foreach (var c in Enum.GetValues<HostCapture.Class>())
@@ -167,8 +185,7 @@ public sealed class PackExporter
         {
             report.AppendLine($"warning: {w}");
         }
-        File.WriteAllText(Path.Combine(versionDir, "capture-report.md"), report.ToString());
-        return new Report(versionDir, gen.LockPath, releaseAssets, sideloadAssets, capture, warnings, sw.Elapsed);
+        File.WriteAllText(path, report.ToString());
     }
 
     private static void WriteSettingsTemplate(string path, PackDefinition pack)

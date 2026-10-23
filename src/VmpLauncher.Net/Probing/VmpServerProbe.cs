@@ -25,6 +25,8 @@ public sealed class VmpServerProbe : IServerProbe
     private static readonly TimeSpan ServerDisconnectGrace = TimeSpan.FromSeconds(2);
 
     private readonly Func<string, CancellationToken, Task<IPAddress[]>> _resolve;
+    private readonly Func<ProbeRequest, NetPeerConfiguration> _configure;
+    private readonly Action<NetClient>? _clientCreated;
 
     public VmpServerProbe()
         : this(null)
@@ -33,8 +35,18 @@ public sealed class VmpServerProbe : IServerProbe
 
     /// <param name="resolver">DNS override for tests; defaults to <see cref="Dns.GetHostAddressesAsync(string, CancellationToken)"/>.</param>
     public VmpServerProbe(Func<string, CancellationToken, Task<IPAddress[]>>? resolver)
+        : this(resolver, null, null)
+    {
+    }
+
+    /// <param name="resolver">See the public constructor.</param>
+    /// <param name="configure">Test seam: builds the Lidgren configuration (e.g. an unbindable local address).</param>
+    /// <param name="clientCreated">Test seam: receives each <see cref="NetClient"/> right after it is created.</param>
+    internal VmpServerProbe(Func<string, CancellationToken, Task<IPAddress[]>>? resolver, Func<ProbeRequest, NetPeerConfiguration>? configure, Action<NetClient>? clientCreated)
     {
         _resolve = resolver ?? ((h, ct) => Dns.GetHostAddressesAsync(h, ct));
+        _configure = configure ?? CreateConfiguration;
+        _clientCreated = clientCreated;
     }
 
     public async Task<ProbeResult> ProbeAsync(ProbeRequest request, CancellationToken cancellationToken = default)
@@ -109,9 +121,11 @@ public sealed class VmpServerProbe : IServerProbe
         };
     }
 
-    private static async Task<ProbeResult> RunAsync(ProbeRequest request, IPEndPoint endpoint, CancellationToken budget, CancellationToken caller)
+    private async Task<ProbeResult> RunAsync(ProbeRequest request, IPEndPoint endpoint, CancellationToken budget, CancellationToken caller)
     {
-        var client = new NetClient(CreateConfiguration(request));
+        var client = new NetClient(_configure(request));
+        _clientCreated?.Invoke(client);
+        var started = false;
         var connected = false;
         var handshakesSent = 0;
         TimeSpan? firstAnswer = null;
@@ -127,6 +141,7 @@ public sealed class VmpServerProbe : IServerProbe
             {
                 client.Start();
             }
+            started = true;
             var hail = client.CreateMessage();
             // L1 must never reveal (or even need) the real password: a random, clearly-labelled dummy hail.
             hail.Write(request.Level == ProbeLevel.Reachability
@@ -186,10 +201,14 @@ public sealed class VmpServerProbe : IServerProbe
                     {
                         if (VmpHandshakeEncoder.TryDecodeReply(msg.Data.AsSpan(0, msg.LengthBytes)) is { } r)
                         {
-                            // HandshookSuccessfully is impossible with our build string; we leave either way.
-                            pending = VmpProtocol.TryParseServerBuild(r.Reason) is { } build
+                            // HandshookSuccessfully is impossible with our build string; we leave either way. A build is only
+                            // trusted from the exact-build rejection (reply code AND message form): the fork-mismatch
+                            // rejection also says "server requires '...'" but names the fork id, not a build.
+                            pending = r.Response == HandshakeReplyCode.ProtocolBuildMismatch && VmpProtocol.TryParseServerBuild(r.Reason) is { } build
                                 ? new ProbeResult(ProbeOutcome.BuildReported, firstAnswer, build, r.Reason)
-                                : new ProbeResult(ProbeOutcome.Rejected, firstAnswer, Reason: $"{r.Response}: {r.Reason}");
+                                : r.Response == HandshakeReplyCode.ServerFull
+                                    ? new ProbeResult(ProbeOutcome.ServerFull, firstAnswer, Reason: r.Reason)
+                                    : new ProbeResult(ProbeOutcome.Rejected, firstAnswer, Reason: $"{r.Response}: {r.Reason}");
                             pendingSince = clock.Elapsed;
                         }
                     }
@@ -208,17 +227,43 @@ public sealed class VmpServerProbe : IServerProbe
         }
         finally
         {
-            client.Shutdown("vmp-launcher probe complete");
-            // Give the network thread a moment to send the bye so the server frees the slot immediately.
-            for (var i = 0; i < 40 && client.Status != NetPeerStatus.NotRunning; i++)
+            if (started)
             {
-                await Task.Delay(5, CancellationToken.None).ConfigureAwait(false);
+                client.Shutdown("vmp-launcher probe complete");
+                // Give the network thread a moment to send the bye so the server frees the slot immediately.
+                for (var i = 0; i < 40 && client.Status != NetPeerStatus.NotRunning; i++)
+                {
+                    await Task.Delay(5, CancellationToken.None).ConfigureAwait(false);
+                }
             }
+            else
+            {
+                // Start() failed (e.g. while binding). No network thread exists, so Shutdown() would only set a flag
+                // nobody reads and the socket Lidgren already created would stay open until finalization.
+                CloseUnstartedSocket(client);
+            }
+        }
+    }
+
+    private static void CloseUnstartedSocket(NetClient client)
+    {
+        try
+        {
+            client.Socket?.Close();
+        }
+        catch (Exception e) when (e is SocketException or ObjectDisposedException)
+        {
+            // Already gone; nothing else to release.
         }
     }
 
     internal static ProbeResult MapDisconnect(ProbeLevel level, string? reason, bool wasConnected, bool handshakeSent, TimeSpan elapsed)
     {
+        if (VmpProtocol.IsServerFull(reason))
+        {
+            // Lidgren refuses on slot count before it looks at the password: the server is up and VMP, just full.
+            return new ProbeResult(ProbeOutcome.ServerFull, elapsed, Reason: reason);
+        }
         if (VmpProtocol.IsInvalidPassword(reason))
         {
             return level == ProbeLevel.Reachability

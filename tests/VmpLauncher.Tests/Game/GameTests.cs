@@ -142,6 +142,99 @@ public class LmpClientInspectorTests
         Assert.False(info.SupportsAutoJoin);
     }
 
+    private static string GameDirWith(byte[]? dllBytes)
+    {
+        var gameDir = Path.Combine(Path.GetTempPath(), "vmpl-tests", Guid.NewGuid().ToString("N"));
+        var dll = LmpClientInspector.DllPathFor(gameDir);
+        Directory.CreateDirectory(Path.GetDirectoryName(dll)!);
+        if (dllBytes is not null)
+        {
+            File.WriteAllBytes(dll, dllBytes);
+        }
+        return gameDir;
+    }
+
+    private static byte[] RealManagedDll() => File.ReadAllBytes(typeof(VmpSettingsFile).Assembly.Location);
+
+    [Fact]
+    public void Inspect_reads_a_valid_client_and_reports_no_error()
+    {
+        var info = LmpClientInspector.Inspect(GameDirWith(RealManagedDll()), out var unreadable);
+        Assert.NotNull(info);
+        Assert.Null(unreadable);
+    }
+
+    [Fact]
+    public void Inspect_returns_null_without_error_when_the_client_is_not_installed()
+    {
+        Assert.Null(LmpClientInspector.Inspect(GameDirWith(null), out var unreadable));
+        Assert.Null(unreadable);
+        Assert.Null(LmpClientInspector.Inspect(GameDirWith(null)));
+    }
+
+    private static byte[] Damaged(string kind)
+    {
+        var real = RealManagedDll();
+        return kind switch
+        {
+            "empty" => [],
+            "garbage" => Enumerable.Range(0, 4096).Select(i => (byte)(i * 31 + 7)).ToArray(),
+            "mz-header-only" => real[..64],
+            "cut-in-pe-headers" => real[..400],
+            "half" => real[..(real.Length / 2)],
+            "minus-last-kb" => real[..^1024],
+            // A valid PE file without .NET metadata (GetMetadataReader throws InvalidOperationException).
+            "native-dll" => File.ReadAllBytes(Path.Combine(Environment.SystemDirectory, "kernel32.dll")),
+            _ => throw new ArgumentOutOfRangeException(nameof(kind)),
+        };
+    }
+
+    [Theory]
+    [InlineData("empty")]
+    [InlineData("garbage")]
+    [InlineData("mz-header-only")]
+    [InlineData("cut-in-pe-headers")]
+    [InlineData("half")]
+    [InlineData("minus-last-kb")]
+    [InlineData("native-dll")]
+    public void Inspect_never_throws_for_truncated_or_corrupt_clients(string kind)
+    {
+        var gameDir = GameDirWith(Damaged(kind));
+
+        var info = LmpClientInspector.Inspect(gameDir, out var unreadable);
+
+        // Some truncations still leave readable metadata; those are fine too, as long as nothing is thrown.
+        if (info is null)
+        {
+            Assert.False(string.IsNullOrEmpty(unreadable), kind);
+            Assert.Contains("LmpClient.dll", unreadable, StringComparison.Ordinal);
+        }
+        Assert.Equal(info is null, LmpClientInspector.Inspect(gameDir) is null);
+    }
+
+    [Fact]
+    public void Garbage_and_header_only_clients_are_definitely_unreadable()
+    {
+        Assert.Null(LmpClientInspector.Inspect(GameDirWith([]), out var empty));
+        Assert.NotNull(empty);
+        Assert.Null(LmpClientInspector.Inspect(GameDirWith(RealManagedDll()[..64]), out var header));
+        Assert.NotNull(header);
+        Assert.Null(LmpClientInspector.Inspect(GameDirWith(Damaged("native-dll")), out var native));
+        Assert.NotNull(native);
+        // The raw reader keeps throwing: Publishing uses it and wants a loud failure for a bad version source.
+        Assert.Throws<BadImageFormatException>(() => LmpClientInspector.InspectDll(LmpClientInspector.DllPathFor(GameDirWith([1, 2, 3]))));
+    }
+
+    [Fact]
+    public void A_locked_client_file_is_unreadable_not_an_exception()
+    {
+        var gameDir = GameDirWith(RealManagedDll());
+        using var exclusive = new FileStream(LmpClientInspector.DllPathFor(gameDir), FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+
+        Assert.Null(LmpClientInspector.Inspect(gameDir, out var unreadable));
+        Assert.NotNull(unreadable);
+    }
+
     [Fact]
     public void Reads_real_vmp_client_when_present()
     {

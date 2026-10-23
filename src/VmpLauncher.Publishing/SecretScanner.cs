@@ -2,6 +2,7 @@ using System.IO.Compression;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
+using VmpLauncher.Core.Diagnostics;
 
 namespace VmpLauncher.Publishing;
 
@@ -28,6 +29,10 @@ public sealed class SecretScanner
     public int NeedleCount => _needles.Count;
 
     /// <summary>Loads passwords from the live client settings.xml and HOSTING\connection.private.json (values stay in memory).</summary>
+    /// <remarks>
+    /// Fails closed: a configured secret source that is missing or unreadable stops the export, because scanning with
+    /// fewer needles than expected would report "clean" without having looked for the real password.
+    /// </remarks>
     public void LoadFromHost(string? settingsXmlPath, string? privateJsonPath)
     {
         if (settingsXmlPath is not null && File.Exists(settingsXmlPath))
@@ -40,13 +45,18 @@ public sealed class SecretScanner
                     Add(pw, "client settings password");
                 }
             }
-            catch (Exception)
+            catch (Exception ex) when (ex is System.Xml.XmlException or IOException or DecoderFallbackException)
             {
-                // unreadable settings file: nothing to learn from it
+                throw new LauncherException(ErrorCode.InvalidPack, $"Secret scan: could not read {settingsXmlPath}, so the game password cannot be checked for.", RecoveryHint.None, ex);
             }
         }
-        if (privateJsonPath is not null && File.Exists(privateJsonPath))
+        if (privateJsonPath is not null && !File.Exists(privateJsonPath))
         {
+            throw new LauncherException(ErrorCode.InvalidPack, $"Secret scan: the private connection file {privateJsonPath} is configured but missing.", RecoveryHint.None);
+        }
+        if (privateJsonPath is not null)
+        {
+            var before = _needles.Count;
             try
             {
                 using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(privateJsonPath));
@@ -62,8 +72,13 @@ public sealed class SecretScanner
                     }
                 }
             }
-            catch (Exception)
+            catch (Exception ex) when (ex is System.Text.Json.JsonException or IOException)
             {
+                throw new LauncherException(ErrorCode.InvalidPack, $"Secret scan: could not parse {privateJsonPath}.", RecoveryHint.None, ex);
+            }
+            if (_needles.Count == before)
+            {
+                throw new LauncherException(ErrorCode.InvalidPack, $"Secret scan: {privateJsonPath} holds no password, secret or token to look for; refusing to scan blind.", RecoveryHint.None);
             }
         }
     }
@@ -98,12 +113,60 @@ public sealed class SecretScanner
             {
                 findings.AddRange(ScanZip(file));
             }
+            else if (file.EndsWith(".gz", StringComparison.OrdinalIgnoreCase))
+            {
+                using var gz = new System.IO.Compression.GZipStream(File.OpenRead(file), System.IO.Compression.CompressionMode.Decompress);
+                using var ms = new MemoryStream();
+                gz.CopyTo(ms);
+                findings.AddRange(ScanBytes(ms.ToArray(), file, "(decompressed)"));
+            }
             else
             {
-                findings.AddRange(ScanBytes(File.ReadAllBytes(file), file, null));
+                var bytes = File.ReadAllBytes(file);
+                findings.AddRange(ScanBytes(bytes, file, null));
+                if (file.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+                {
+                    findings.AddRange(ScanInlineContent(bytes, file));
+                }
             }
         }
         return findings;
+    }
+
+    /// <summary>
+    /// Override files travel inside the lock as base64 ("inlineBase64"); a base64 needle only matches a secret that
+    /// starts on a 3-byte boundary, so decode every inline payload and scan the real bytes.
+    /// </summary>
+    private IEnumerable<Finding> ScanInlineContent(byte[] json, string file)
+    {
+        System.Text.Json.JsonDocument doc;
+        try
+        {
+            doc = System.Text.Json.JsonDocument.Parse(json);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            yield break;
+        }
+        using (doc)
+        {
+            foreach (var p in Walk(doc.RootElement).Where(p => p.Name.Equals("inlineBase64", StringComparison.OrdinalIgnoreCase) && p.Value.ValueKind == System.Text.Json.JsonValueKind.String).ToList())
+            {
+                byte[] decoded;
+                try
+                {
+                    decoded = Convert.FromBase64String(p.Value.GetString()!);
+                }
+                catch (FormatException)
+                {
+                    continue;
+                }
+                foreach (var f in ScanBytes(decoded, file, "inline override content"))
+                {
+                    yield return f;
+                }
+            }
+        }
     }
 
     private IEnumerable<Finding> ScanZip(string zipPath)

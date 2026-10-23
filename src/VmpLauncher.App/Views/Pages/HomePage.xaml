@@ -1,4 +1,4 @@
-<Page
+<UserControl
     x:Class="VmpLauncher.App.Views.Pages.HomePage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -8,82 +8,245 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d"
     d:DataContext="{d:DesignInstance vm:HomeViewModel}"
-    Title="Home"
     AllowDrop="True">
-    <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel Margin="{StaticResource Space.Page.Padding}" MaxWidth="1100" HorizontalAlignment="Stretch">
-            <!-- Hero -->
-            <Border CornerRadius="{StaticResource Space.Radius.Hero}" Height="240" ClipToBounds="True" Background="{StaticResource Space.StarfieldBrush}">
+    <ScrollViewer Style="{StaticResource Space.PageScroll}">
+        <StackPanel Margin="{StaticResource Space.Page.Padding}" MaxWidth="1120">
+
+            <!-- ===== Hero ===== -->
+            <Border CornerRadius="{StaticResource Space.Radius.Hero}" Height="318" ClipToBounds="True" Background="{StaticResource Space.StarfieldBrush}"
+                    BorderBrush="{StaticResource Space.Stroke.SubtleBrush}" BorderThickness="1">
                 <Grid>
+                    <!-- Planet art (right side) -->
+                    <Canvas HorizontalAlignment="Right" Width="460" IsHitTestVisible="False">
+                        <Ellipse Canvas.Left="150" Canvas.Top="18" Width="330" Height="330" Opacity="0.55">
+                            <Ellipse.Fill>
+                                <RadialGradientBrush GradientOrigin="0.5,0.5" Center="0.5,0.5" RadiusX="0.5" RadiusY="0.5">
+                                    <GradientStop Color="#55B69CFF" Offset="0" />
+                                    <GradientStop Color="#00B69CFF" Offset="1" />
+                                </RadialGradientBrush>
+                            </Ellipse.Fill>
+                        </Ellipse>
+                        <Ellipse Canvas.Left="215" Canvas.Top="78" Width="200" Height="200">
+                            <Ellipse.Fill>
+                                <RadialGradientBrush GradientOrigin="0.32,0.28" Center="0.4,0.35" RadiusX="0.75" RadiusY="0.75">
+                                    <GradientStop Color="#FFE3D8FF" Offset="0" />
+                                    <GradientStop Color="#FFB69CFF" Offset="0.35" />
+                                    <GradientStop Color="#FF5B3FC4" Offset="0.8" />
+                                    <GradientStop Color="#FF231A52" Offset="1" />
+                                </RadialGradientBrush>
+                            </Ellipse.Fill>
+                        </Ellipse>
+                        <Ellipse Canvas.Left="150" Canvas.Top="150" Width="330" Height="58" StrokeThickness="7" Opacity="0.85">
+                            <Ellipse.Stroke>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                    <GradientStop Color="#00C9B5FF" Offset="0" />
+                                    <GradientStop Color="#FFC9B5FF" Offset="0.25" />
+                                    <GradientStop Color="#FF9478F0" Offset="0.75" />
+                                    <GradientStop Color="#00C9B5FF" Offset="1" />
+                                </LinearGradientBrush>
+                            </Ellipse.Stroke>
+                            <Ellipse.RenderTransform>
+                                <RotateTransform Angle="-18" CenterX="165" CenterY="29" />
+                            </Ellipse.RenderTransform>
+                        </Ellipse>
+                        <Ellipse Canvas.Left="418" Canvas.Top="66" Width="16" Height="16" Fill="#FFECEAF6" Opacity="0.9" />
+                    </Canvas>
+                    <!-- Scrim so text stays readable over the art -->
                     <Border>
                         <Border.Background>
-                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                                <GradientStop Color="#000B0D17" Offset="0.15" />
-                                <GradientStop Color="#F00B0D17" Offset="1" />
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                <GradientStop Color="#F00A0C18" Offset="0" />
+                                <GradientStop Color="#B00A0C18" Offset="0.45" />
+                                <GradientStop Color="#000A0C18" Offset="0.8" />
                             </LinearGradientBrush>
                         </Border.Background>
                     </Border>
-                    <ui:ProgressRing IsIndeterminate="True" Width="28" Height="28" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,16,16,0" Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}" />
-                    <StackPanel VerticalAlignment="Bottom" Margin="28,0,28,22">
-                        <TextBlock Style="{StaticResource Space.Style.Display}" Text="{Binding PackName}" />
-                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-                            <TextBlock Style="{StaticResource Space.Style.Secondary}" Text="by " />
-                            <TextBlock Style="{StaticResource Space.Style.Secondary}" Text="{Binding PackAuthor}" />
-                            <TextBlock Style="{StaticResource Space.Style.Secondary}" Text=" · " />
-                            <TextBlock Style="{StaticResource Space.Style.Secondary}" Text="{Binding PackVersion}" />
-                            <Border Style="{StaticResource Space.Badge}" Margin="14,0,0,0" BorderBrush="{Binding StateKind, Converter={StaticResource StatusKindToBrush}}">
-                                <TextBlock Style="{StaticResource Space.Style.Caption}" Text="{Binding StateBadge}" />
+
+                    <Grid Margin="36,30,36,30">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <StackPanel Grid.Row="0" Orientation="Horizontal">
+                            <Border Style="{StaticResource Space.Badge}" BorderBrush="{Binding StateKind, Converter={StaticResource StatusKindToBrush}}">
+                                <StackPanel Orientation="Horizontal">
+                                    <Ellipse Width="8" Height="8" Margin="0,0,7,0" Fill="{Binding StateKind, Converter={StaticResource StatusKindToBrush}}" VerticalAlignment="Center" />
+                                    <TextBlock Style="{StaticResource Space.Style.Caption}" Foreground="{StaticResource Space.Text.PrimaryBrush}" Text="{Binding StateBadge}" />
+                                </StackPanel>
                             </Border>
+                            <ui:ProgressRing IsIndeterminate="True" Width="18" Height="18" Margin="12,0,0,0" Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}" />
                         </StackPanel>
-                    </StackPanel>
-                    <ui:Button Content="{Binding PrimaryAction}" Command="{Binding PrimaryCommand}" IsEnabled="{Binding PrimaryEnabled}"
-                               Appearance="Primary" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,28,22" Padding="30,10" FontSize="16" FontWeight="SemiBold"
-                               AutomationProperties.Name="{Binding PrimaryAction}" />
+
+                        <StackPanel Grid.Row="1" VerticalAlignment="Center" MaxWidth="560" HorizontalAlignment="Left">
+                            <TextBlock Style="{StaticResource Space.Style.Hero}" Text="{Binding PackName}" />
+                            <TextBlock Style="{StaticResource Space.Style.Secondary}" Margin="0,6,0,0">
+                                <Run Text="by" /> <Run Text="{Binding PackAuthor, Mode=OneWay}" /> <Run Text="·" /> <Run Text="{Binding PackVersion, Mode=OneWay}" />
+                            </TextBlock>
+                            <TextBlock Style="{StaticResource Space.Style.Body}" Margin="0,12,0,0" Text="{Binding StateHeadline}" Foreground="{StaticResource Space.Text.PrimaryBrush}" />
+                        </StackPanel>
+
+                        <!-- Actions (idle) -->
+                        <StackPanel Grid.Row="2" Orientation="Horizontal" Visibility="{Binding IsOperationRunning, Converter={StaticResource InvertedBoolToVisibility}}">
+                            <Button Style="{StaticResource Space.Button.Launch}" Command="{Binding PrimaryCommand}" IsEnabled="{Binding PrimaryEnabled}" MinWidth="200"
+                                    AutomationProperties.Name="{Binding PrimaryAction}">
+                                <StackPanel Orientation="Horizontal">
+                                    <ui:SymbolIcon Symbol="{Binding PrimaryIcon}" Filled="True" FontSize="22" Margin="0,0,10,0" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                                    <TextBlock Text="{Binding PrimaryAction}" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                            <ui:Button Command="{Binding RefreshCommand}" Icon="{ui:SymbolIcon ArrowSync24}" Margin="14,0,0,0" Height="44" Width="44" Padding="0"
+                                       ToolTip="Check for pack updates" AutomationProperties.Name="Check for pack updates" VerticalAlignment="Center" />
+                            <ui:Button Command="{Binding OpenProfileFolderCommand}" Icon="{ui:SymbolIcon FolderOpen24}" Margin="8,0,0,0" Height="44" Width="44" Padding="0"
+                                       ToolTip="Open the modded game folder" AutomationProperties.Name="Open the modded game folder" VerticalAlignment="Center" />
+                        </StackPanel>
+
+                        <!-- Progress (while installing / updating) -->
+                        <Border Grid.Row="2" Padding="18,14" CornerRadius="14" Background="#E61B1F3A" BorderBrush="#FF3A2F78" BorderThickness="1" MaxWidth="640" HorizontalAlignment="Left"
+                                Visibility="{Binding IsOperationRunning, Converter={StaticResource BoolToVisibility}}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="{Binding OpTitle}" FontWeight="SemiBold" FontSize="15" Foreground="{StaticResource Space.Text.PrimaryBrush}" />
+                                    <TextBlock Text="{Binding OpMessage}" Style="{StaticResource Space.Style.Caption}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" Margin="0,2,0,0" />
+                                    <ProgressBar Style="{StaticResource Space.Progress}" Margin="0,10,0,0" Value="{Binding OpPercent, Mode=OneWay}" IsIndeterminate="{Binding OpIndeterminate}" />
+                                    <TextBlock Text="{Binding OpStats}" Style="{StaticResource Space.Style.Caption}" Margin="0,6,0,0" />
+                                </StackPanel>
+                                <ui:Button Grid.Column="1" Content="Cancel" Command="{Binding CancelOperationCommand}" Icon="{ui:SymbolIcon Dismiss24}" Margin="16,0,0,0" VerticalAlignment="Top"
+                                           ToolTip="Stops and puts your previous working setup back" />
+                            </Grid>
+                        </Border>
+                    </Grid>
                 </Grid>
             </Border>
 
-            <ContentControl Content="{Binding Error}" ContentTemplate="{StaticResource ErrorCardTemplate}" Visibility="{Binding Error, Converter={StaticResource NullToVisibility}}" />
+            <ContentControl Content="{Binding Error}" ContentTemplate="{StaticResource ErrorCardTemplate}" Visibility="{Binding Error, Converter={StaticResource NullToVisibility}}" Focusable="False" />
 
-            <!-- Private package drop zone -->
-            <Border Style="{StaticResource Space.Card}" Margin="0,16,0,0" BorderBrush="{StaticResource Space.AccentBrush}" Visibility="{Binding NeedsSideload, Converter={StaticResource BoolToVisibility}}">
-                <StackPanel Orientation="Horizontal">
-                    <ui:SymbolIcon Symbol="FolderZip24" FontSize="28" Foreground="{StaticResource Space.AccentBrush}" Margin="0,0,16,0" VerticalAlignment="Center" />
-                    <StackPanel>
-                        <TextBlock Style="{StaticResource Space.SectionTitle}" Text="Private package needed" Margin="0" />
-                        <TextBlock Style="{StaticResource Space.Style.Secondary}" Text="{Binding SideloadHint}" Margin="0,4,0,0" />
+            <!-- ===== Private mods ===== -->
+            <Border Margin="0,16,0,0" Visibility="{Binding ShowPrivateCard, Converter={StaticResource BoolToVisibility}}">
+                <Border.Style>
+                    <Style TargetType="Border" BasedOn="{StaticResource Space.Card}">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding PrivateBlocking}" Value="True">
+                                <Setter Property="BorderBrush" Value="{StaticResource Space.AccentBrush}" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border Width="46" Height="46" CornerRadius="12" Background="{StaticResource Space.Accent.SoftBrush}" VerticalAlignment="Top" Margin="0,0,16,0">
+                        <ui:SymbolIcon Symbol="LockClosed24" Filled="True" FontSize="22" Foreground="{StaticResource Space.AccentBrush}" />
+                    </Border>
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Style="{StaticResource Space.SectionTitle}" Text="{Binding PrivateHeadline}" Margin="0,0,0,4" />
+                        <TextBlock Style="{StaticResource Space.Style.Secondary}" Text="{Binding PrivateBody}" />
+                        <ItemsControl ItemsSource="{Binding PrivateNeeds}" Margin="0,12,0,0" Focusable="False">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:PrivateNeedRow}">
+                                    <Grid Margin="0,4">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel>
+                                            <TextBlock Style="{StaticResource Space.Style.Body}" FontWeight="SemiBold">
+                                                <Run Text="{Binding Name, Mode=OneWay}" /> <Run Text="{Binding Version, Mode=OneWay}" Foreground="{StaticResource Space.Text.SecondaryBrush}" FontWeight="Normal" />
+                                            </TextBlock>
+                                            <TextBlock Style="{StaticResource Space.Style.Caption}" Text="{Binding FileName}" FontFamily="{StaticResource Space.Font.Mono}" />
+                                        </StackPanel>
+                                        <Border Grid.Column="1" Style="{StaticResource Space.Badge}" BorderBrush="{Binding StateKind, Converter={StaticResource StatusKindToBrush}}">
+                                            <TextBlock Style="{StaticResource Space.Style.Caption}" Text="{Binding StateText}" Foreground="{StaticResource Space.Text.PrimaryBrush}" />
+                                        </Border>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <Grid Margin="0,14,0,0" Visibility="{Binding PrivateNeedsInvite, Converter={StaticResource BoolToVisibility}}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <ui:TextBox Text="{Binding InviteText, UpdateSourceTrigger=PropertyChanged}" PlaceholderText="Paste the invite code (VMPINVITE1-...)" FontFamily="{StaticResource Space.Font.Mono}"
+                                        AutomationProperties.Name="Invite code" />
+                            <ui:Button Grid.Column="1" Content="Use invite" Appearance="Primary" Command="{Binding ApplyInviteCommand}" Margin="8,0,0,0" Icon="{ui:SymbolIcon Key24}" />
+                        </Grid>
+                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0" Visibility="{Binding PrivateBlocking, Converter={StaticResource BoolToVisibility}}">
+                            <ui:SymbolIcon Symbol="ArrowDownload24" Foreground="{StaticResource Space.Text.SecondaryBrush}" Margin="0,0,6,0" />
+                            <TextBlock Style="{StaticResource Space.Style.Caption}" VerticalAlignment="Center" Text="Got the zip instead? Drop it anywhere on this page, or" />
+                            <Button Style="{StaticResource Space.Button.Link}" Content="browse for it" Command="{Binding BrowsePrivateFileCommand}" Margin="2,0,0,0" />
+                        </StackPanel>
                     </StackPanel>
-                </StackPanel>
+                </Grid>
             </Border>
 
+            <!-- ===== Facts ===== -->
+            <UniformGrid Columns="4" Margin="-6,16,-6,0">
+                <Border Style="{StaticResource Space.Card}" Margin="6,0" Padding="18,16">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource Space.Style.Overline}" Text="MODS" />
+                        <TextBlock Style="{StaticResource Space.Style.Stat}" Text="{Binding ModsCount}" Margin="0,6,0,0" />
+                        <TextBlock Style="{StaticResource Space.Style.Caption}" Text="{Binding ModsDetail}" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource Space.Card}" Margin="6,0" Padding="18,16">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource Space.Style.Overline}" Text="DOWNLOAD" />
+                        <TextBlock Style="{StaticResource Space.Style.Stat}" Text="{Binding DownloadSize}" Margin="0,6,0,0" />
+                        <TextBlock Style="{StaticResource Space.Style.Caption}" Text="first install; updates fetch only changes" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource Space.Card}" Margin="6,0" Padding="18,16">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource Space.Style.Overline}" Text="ON DISK" />
+                        <TextBlock Style="{StaticResource Space.Style.Stat}" Text="{Binding DiskSize}" Margin="0,6,0,0" />
+                        <TextBlock Style="{StaticResource Space.Style.Caption}" Text="separate copy; your KSP stays untouched" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource Space.Card}" Margin="6,0" Padding="18,16">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource Space.Style.Overline}" Text="PUBLISHER" />
+                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                            <ui:SymbolIcon Symbol="{Binding TrustKind, Converter={StaticResource StatusKindToSymbol}}" Filled="True" FontSize="20"
+                                           Foreground="{Binding TrustKind, Converter={StaticResource StatusKindToBrush}}" Margin="0,0,8,0" VerticalAlignment="Center" />
+                            <TextBlock Style="{StaticResource Space.Style.Body}" FontWeight="SemiBold" Text="{Binding TrustLine}" VerticalAlignment="Center" />
+                        </StackPanel>
+                        <TextBlock Style="{StaticResource Space.Style.Caption}" Text="every file is checked against the signed pack" Margin="0,4,0,0" />
+                    </StackPanel>
+                </Border>
+            </UniformGrid>
+
+            <!-- ===== Details ===== -->
             <Grid Margin="0,16,0,0">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="3*" />
+                    <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="16" />
-                    <ColumnDefinition Width="2*" />
+                    <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
                 <Border Grid.Column="0" Style="{StaticResource Space.Card}">
                     <StackPanel>
                         <TextBlock Style="{StaticResource Space.SectionTitle}" Text="Requirements" />
-                        <ItemsControl ItemsSource="{Binding Requirements}" ItemTemplate="{StaticResource RequirementRowTemplate}" />
+                        <ItemsControl ItemsSource="{Binding Requirements}" ItemTemplate="{StaticResource RequirementRowTemplate}" Focusable="False" />
                     </StackPanel>
                 </Border>
                 <Border Grid.Column="2" Style="{StaticResource Space.Card}">
                     <StackPanel>
-                        <TextBlock Style="{StaticResource Space.SectionTitle}" Text="About this pack" />
-                        <TextBlock Style="{StaticResource Space.Style.Body}" Text="{Binding PackDescription}" />
-                        <TextBlock Style="{StaticResource Space.Style.Caption}" Margin="0,10,0,0" Text="{Binding FactsLine}" />
-                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                            <ui:SymbolIcon Symbol="{Binding TrustKind, Converter={StaticResource StatusKindToSymbol}}" Foreground="{Binding TrustKind, Converter={StaticResource StatusKindToBrush}}" Margin="0,0,8,0" VerticalAlignment="Center" />
-                            <TextBlock Style="{StaticResource Space.Style.Caption}" Text="{Binding TrustLine}" VerticalAlignment="Center" TextWrapping="Wrap" />
-                        </StackPanel>
-                        <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
-                            <ui:Button Content="Refresh" Command="{Binding RefreshCommand}" Icon="{ui:SymbolIcon ArrowSync24}" Margin="0,0,8,0" />
-                            <ui:Button Content="Open game folder" Command="{Binding OpenProfileFolderCommand}" Icon="{ui:SymbolIcon FolderOpen24}" />
-                        </StackPanel>
-                        <TextBlock Style="{StaticResource Space.Style.Caption}" Margin="0,8,0,0" Text="{Binding LastCheck}" />
+                        <DockPanel>
+                            <Button DockPanel.Dock="Right" Style="{StaticResource Space.Button.Link}" Content="All mods" Command="{Binding OpenModsCommand}" />
+                            <TextBlock Style="{StaticResource Space.SectionTitle}" Text="What's new" />
+                        </DockPanel>
+                        <TextBlock Style="{StaticResource Space.Style.Body}" Text="{Binding WhatsNew}" LineHeight="22" Visibility="{Binding WhatsNew, Converter={StaticResource NullToVisibility}}" />
+                        <TextBlock Style="{StaticResource Space.Style.Secondary}" Text="{Binding PackDescription}" Visibility="{Binding WhatsNew, Converter={StaticResource NullToVisibilityInverted}}" />
+                        <TextBlock Style="{StaticResource Space.Style.Caption}" Margin="0,12,0,0" Text="{Binding LastCheck}" />
                     </StackPanel>
                 </Border>
             </Grid>
         </StackPanel>
     </ScrollViewer>
-</Page>
+</UserControl>

@@ -3,19 +3,21 @@
 .PARAMETER Out       PNG path for the screenshot.
 .PARAMETER WaitSec   Seconds to wait for the window.
 .PARAMETER Keep      Leave the app running.
-.PARAMETER Extra     Extra launcher arguments (e.g. '--no-backdrop').
+.PARAMETER Extra     Extra launcher arguments (e.g. '--page play').
+.PARAMETER DataDir   Launcher data dir (default %TEMP%mpl-devdata; use a new folder to see first-run setup).
 #>
 param(
     [string]$Out = (Join-Path $env:TEMP 'vmpl-shot.png'),
     [int]$WaitSec = 7,
     [switch]$Keep,
-    [string]$Extra = ""
+    [string]$Extra = "",
+    [string]$DataDir = (Join-Path $env:TEMP 'vmpl-devdata')
 )
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
 $exe = Get-ChildItem -Path (Join-Path $repo 'src\VmpLauncher.App\bin\Debug') -Recurse -Filter VmpLauncher.exe | Select-Object -First 1 -ExpandProperty FullName
 if (-not $exe) { throw 'Build the App project first.' }
-$data = Join-Path $env:TEMP 'vmpl-devdata'
+$data = $DataDir
 $argList = @("--data-dir", "`"$data`"") + @($Extra -split " " | Where-Object { $_ })
 $p = Start-Process -FilePath $exe -ArgumentList $argList -PassThru
 Start-Sleep -Seconds $WaitSec

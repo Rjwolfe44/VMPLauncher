@@ -21,6 +21,7 @@ public static class OverrideApplier
         foreach (var o in overrides)
         {
             var abs = SafePath.Resolve(profile.GameDir, o.Path);
+            SafePath.ThrowIfReparsePointAbove(profile.GameDir, abs, o.Path);
             switch (o.Op)
             {
                 case "add":
@@ -81,12 +82,28 @@ public static class OverrideApplier
         return notes;
     }
 
+    /// <summary>
+    /// Writes an add/replace override's content again, whatever is at the path now (Repair: the file is missing or
+    /// damaged). The content is verified against the override's own hash.
+    /// </summary>
+    public static void Rewrite(ProfilePaths profile, LockOverride o, ResolveArtifact resolveArtifact)
+    {
+        if (o.Op is not ("add" or "replace"))
+        {
+            throw new InvalidOperationException($"Override {o.Id} ({o.Op}) has no content to rewrite.");
+        }
+        var abs = SafePath.Resolve(profile.GameDir, o.Path);
+        SafePath.ThrowIfReparsePointAbove(profile.GameDir, abs, o.Path);
+        WriteContent(o, abs, resolveArtifact);
+    }
+
     /// <summary>Undo the overrides touching modules about to be re-installed, so CKAN sees its own files.</summary>
     public static void Unapply(ProfilePaths profile, IEnumerable<LockOverride> overrides)
     {
         foreach (var o in overrides)
         {
             var abs = SafePath.Resolve(profile.GameDir, o.Path);
+            SafePath.ThrowIfReparsePointAbove(profile.GameDir, abs, o.Path);
             switch (o.Op)
             {
                 case "add":
@@ -97,10 +114,19 @@ public static class OverrideApplier
                     break;
                 case "disable":
                 {
+                    // Rename the owner's file back (it is the module's only copy), so CKAN's uninstall finds and
+                    // removes it, or so it is in place again when the module stays.
                     var renamed = SafePath.Resolve(Path.GetDirectoryName(abs)!, o.RenameTo!);
                     if (File.Exists(renamed))
                     {
-                        File.Delete(renamed);
+                        if (File.Exists(abs))
+                        {
+                            File.Delete(renamed);
+                        }
+                        else
+                        {
+                            File.Move(renamed, abs);
+                        }
                     }
                     break;
                 }

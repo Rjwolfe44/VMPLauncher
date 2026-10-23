@@ -36,21 +36,70 @@ public sealed class LauncherService : IDisposable
     private readonly AppSettingsStore _settings;
     private readonly ISecretStore _secrets;
     private readonly PackCatalogService _catalog;
+    private readonly PrivateModsService _private;
     private readonly OperationRunner _runner;
     private readonly ILogger<LauncherService> _log;
     private readonly VmpLauncher.Ckan.Backend.CkanWorker _worker = new();
 
-    public LauncherService(LauncherPaths paths, AppSettingsStore settings, ISecretStore secrets, PackCatalogService catalog, OperationRunner runner, ILogger<LauncherService> log)
+    public LauncherService(LauncherPaths paths, AppSettingsStore settings, ISecretStore secrets, PackCatalogService catalog, PrivateModsService privateMods, OperationRunner runner, ILogger<LauncherService> log)
     {
         _paths = paths;
         _settings = settings;
         _secrets = secrets;
         _catalog = catalog;
+        _private = privateMods;
         _runner = runner;
         _log = log;
     }
 
     public ResolvedPack? CurrentPack { get; private set; }
+
+    /// <summary>Raised on the UI thread after the pack was refreshed or an operation changed the profile.</summary>
+    public event Action? StateChanged;
+
+    private InstallVerifier.Result? _lastVerify;
+    private string? _lastVerifyLock;
+
+    /// <summary>
+    /// Quick integrity check of the installed profile (size/time/file id, hashing only what looks changed). A profile
+    /// that fails it is reported as Modified so Home offers Repair instead of Play.
+    /// </summary>
+    public async Task RefreshIntegrityAsync(CancellationToken ct)
+    {
+        if (_runner.IsBusy)
+        {
+            return;
+        }
+        try
+        {
+            var installedLock = InstalledState.TryRead(ProfilePaths)?.LockSha256;
+            var r = await QuickVerifyAsync(ct).ConfigureAwait(false);
+            _lastVerify = r;
+            _lastVerifyLock = installedLock;
+            if (r is { IsClean: false })
+            {
+                _log.LogWarning("Quick verify: {Missing} missing, {Modified} modified, {Dlls} unknown DLLs", r.Missing.Count, r.Modified.Count, r.UnknownDlls.Count);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or LauncherException)
+        {
+            _log.LogWarning(ex, "Quick verify failed");
+        }
+        RaiseStateChanged();
+    }
+
+    private void RaiseStateChanged()
+    {
+        var d = System.Windows.Application.Current?.Dispatcher;
+        if (d is null || d.CheckAccess())
+        {
+            StateChanged?.Invoke();
+        }
+        else
+        {
+            d.BeginInvoke(() => StateChanged?.Invoke());
+        }
+    }
     public OperationRunner Runner => _runner;
     public LauncherPaths Paths => _paths;
 
@@ -72,6 +121,7 @@ public sealed class LauncherService : IDisposable
     public async Task<ResolvedPack?> RefreshPackAsync(CancellationToken ct)
     {
         CurrentPack = await _catalog.ResolveAsync(PackId, ct).ConfigureAwait(false);
+        RaiseStateChanged();
         return CurrentPack;
     }
 
@@ -100,6 +150,10 @@ public sealed class LauncherService : IDisposable
         {
             return new ProfileStatus(ProfileState.UpdateAvailable, profile, installed, CurrentPack, 0, $"{installed.PackVersion} → {CurrentPack.Lock.Pack.Version}");
         }
+        if (_lastVerify is { IsClean: false } v && _lastVerifyLock is not null && Core.Hashing.Sha256Util.HexEquals(_lastVerifyLock, installed.LockSha256))
+        {
+            return new ProfileStatus(ProfileState.Modified, profile, installed, CurrentPack, v.Missing.Count + v.Modified.Count + v.UnknownDlls.Count, null);
+        }
         return new ProfileStatus(ProfileState.Installed, profile, installed, CurrentPack, 0, null);
     }
 
@@ -120,36 +174,75 @@ public sealed class LauncherService : IDisposable
         }, ct).ConfigureAwait(false);
     }
 
-    public Task<ProfileOperations.Report> InstallOrUpdateAsync(IReadOnlyDictionary<string, string>? sideloads, CancellationToken outer)
+    public PrivateModsService PrivateMods => _private;
+
+    public async Task<ProfileOperations.Report> InstallOrUpdateAsync(CancellationToken outer)
     {
         var pack = CurrentPack ?? throw new LauncherException(ErrorCode.InvalidPack, "No pack is loaded.");
         var status = GetStatus();
-        var isUpdate = status.State is ProfileState.UpdateAvailable or ProfileState.Installed;
-        return _runner.RunAsync(isUpdate ? OperationKind.Update : OperationKind.Install, isUpdate ? $"Updating to {pack.Lock.Pack.Version}" : $"Installing {pack.Lock.Pack.Name}", (progress, ct) =>
+        var isUpdate = status.State is ProfileState.UpdateAvailable or ProfileState.Installed or ProfileState.Modified;
+        try
         {
-            using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, outer);
-            var token = linked.Token;
-            return _worker.RunAsync(() =>
+            return await _runner.RunAsync(isUpdate ? OperationKind.Update : OperationKind.Install, isUpdate ? $"Updating to {pack.Lock.Pack.Version}" : $"Installing {pack.Lock.Pack.Name}", async (progress, ct) =>
             {
-                var profile = EnsureProfileSeeded(pack, progress);
-                var ops = new ProfileOperations(_paths, new ProgressWriter(progress), progress);
-                var request = new ProfileOperations.Request(profile, new ProfileOperations.LockSource(pack.LockPath, pack.InventoryPath), CacheDir, Offline: false, sideloads);
-                return isUpdate ? ops.Update(request, token) : ops.Install(request, token);
-            }, token);
-        });
+                using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, outer);
+                var token = linked.Token;
+                // Private packages first: nothing in the profile changes until every file is verified locally.
+                var sideloads = await _private.PrepareAsync(pack.Lock, isUpdate ? InstalledLock() : null, progress, token).ConfigureAwait(false);
+                return await _worker.RunAsync(() =>
+                {
+                    var profile = EnsureProfileSeeded(pack, progress);
+                    var ops = new ProfileOperations(_paths, new ProgressWriter(progress), progress);
+                    var request = new ProfileOperations.Request(profile, new ProfileOperations.LockSource(pack.LockPath, pack.InventoryPath), CacheDir, Offline: false, sideloads);
+                    return isUpdate ? ops.Update(request, token) : ops.Install(request, token);
+                }, token).ConfigureAwait(false);
+            }).ConfigureAwait(false);
+        }
+        finally
+        {
+            _lastVerify = null;
+            RaiseStateChanged();
+        }
     }
 
-    public Task<ProfileOperations.RepairReport> RepairAsync(bool quarantineUnknownDlls, CancellationToken outer)
-        => _runner.RunAsync(OperationKind.Repair, "Repairing", (progress, ct) =>
+    public async Task<ProfileOperations.RepairReport> RepairAsync(bool quarantineUnknownDlls, CancellationToken outer)
+    {
+        try
         {
-            using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, outer);
-            var token = linked.Token;
-            return _worker.RunAsync(() => new ProfileOperations(_paths, new ProgressWriter(progress), progress).Repair(ProfilePaths, CacheDir, quarantineUnknownDlls, token), token);
-        });
+            return await _runner.RunAsync(OperationKind.Repair, "Repairing", async (progress, ct) =>
+            {
+                using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, outer);
+                var token = linked.Token;
+                // Repair restores from the installed lock; its private archives come from the private cache or the invite.
+                var installed = InstalledLock();
+                var sideloads = installed is null ? null : await _private.PrepareAsync(installed, null, progress, token).ConfigureAwait(false);
+                return await _worker.RunAsync(() => new ProfileOperations(_paths, new ProgressWriter(progress), progress).Repair(ProfilePaths, CacheDir, quarantineUnknownDlls, token, sideloads), token).ConfigureAwait(false);
+            }).ConfigureAwait(false);
+        }
+        finally
+        {
+            _lastVerify = null;
+            RaiseStateChanged();
+        }
+    }
 
-    public Task<RollbackEngine.Result?> RecoverAsync(CancellationToken outer)
-        => _runner.RunAsync(OperationKind.Recover, "Restoring previous state", (progress, ct) =>
-            _worker.RunAsync(() => new ProfileOperations(_paths, new ProgressWriter(progress), progress).Recover(ProfilePaths, ct), ct));
+    public async Task<RollbackEngine.Result?> RecoverAsync(CancellationToken outer)
+    {
+        try
+        {
+            return await _runner.RunAsync(OperationKind.Recover, "Restoring previous state", async (progress, ct) =>
+            {
+                using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, outer);
+                var token = linked.Token;
+                return await _worker.RunAsync(() => new ProfileOperations(_paths, new ProgressWriter(progress), progress).Recover(ProfilePaths, token), token).ConfigureAwait(false);
+            }).ConfigureAwait(false);
+        }
+        finally
+        {
+            _lastVerify = null;
+            RaiseStateChanged();
+        }
+    }
 
     private ProfilePaths EnsureProfileSeeded(ResolvedPack pack, IProgress<VmpLauncher.Ckan.Users.CkanProgress> progress)
     {
@@ -210,9 +303,36 @@ public sealed class LauncherService : IDisposable
         }
         VmpSettingsFile.Save(doc, settingsPath);
         var client = LmpClientInspector.Inspect(profile.GameDir);
-        var join = client?.SupportsAutoJoin == true ? routeEntryName : null;
-        _log.LogInformation("Launching KSP from {GameDir}; auto-join={Join} (client {Build})", profile.GameDir, join ?? "(manual)", client?.ExactBuild);
+        // -vmpjoin is always passed (older clients ignore it); the log says whether this client will act on it.
+        _log.LogInformation("Launching KSP from {GameDir}; -vmpjoin {Route} (client {Build}, auto-join {Supported})", profile.GameDir, routeEntryName ?? "(none)", client?.ExactBuild, client?.SupportsAutoJoin == true ? "supported" : "not supported");
         return KspLauncher.Launch(new KspLauncher.LaunchSpec(profile.GameDir, routeEntryName, s.BorderlessWindow, Array.Empty<string>()));
+    }
+
+    private (string Path, DateTime Stamp, PackLock Lock)? _installedLockCache;
+
+    /// <summary>The lock the profile was last installed from (its private copy), or null.</summary>
+    public PackLock? InstalledLock()
+    {
+        try
+        {
+            var file = ProfilePaths.LockCopyFile;
+            if (!File.Exists(file))
+            {
+                return null;
+            }
+            var stamp = File.GetLastWriteTimeUtc(file);
+            if (_installedLockCache is { } c && c.Path == file && c.Stamp == stamp)
+            {
+                return c.Lock;
+            }
+            var lk = LauncherJson.ReadFile<PackLock>(file);
+            _installedLockCache = (file, stamp, lk);
+            return lk;
+        }
+        catch (Exception ex) when (ex is IOException or System.Text.Json.JsonException or InvalidDataException)
+        {
+            return null;
+        }
     }
 
     public LmpClientInfo? InstalledClient() => ProfilePaths.Exists ? LmpClientInspector.Inspect(ProfilePaths.GameDir) : null;

@@ -28,6 +28,8 @@ public sealed class LauncherPaths
     public string CkanConfigFile => Path.Combine(CkanDir, "config.json");
     public string CkanReposDir => Path.Combine(CkanDir, "repos");
     public string CacheDir => Path.Combine(DataRoot, "cache");
+    /// <summary>Verified private package zips (fetched with an invite token or dropped by the user), named by SHA-256.</summary>
+    public string PrivateCacheDir => Path.Combine(CacheDir, "private");
     public string ProfilesDir => Path.Combine(DataRoot, "profiles");
     public string LogsDir => Path.Combine(DataRoot, "logs");
     public string SettingsFile => Path.Combine(DataRoot, "settings.json");

@@ -61,8 +61,10 @@ public static class CustomPackageBuilder
                 lockUrls = new[] { downloadUrl };
                 break;
             case "private-sideload":
+            case "private-github":
                 // CKAN metadata requires a download URL; .invalid never resolves, and the launcher never tries it
-                // because the lock marks the artifact as sideload-only.
+                // because the lock marks the artifact as private. Both private kinds use the same placeholder so
+                // switching between them does not change the module metadata (no spurious reinstall).
                 downloadUrl = $"https://sideload.invalid/{src.Id}/{fileName}";
                 lockUrls = Array.Empty<string>();
                 break;
@@ -93,15 +95,32 @@ public static class CustomPackageBuilder
         // No release_date: the metadata must be a pure function of the package content so that an
         // unchanged custom package is "unchanged" in LockDiff across exports (release_date is optional in CKAN).
         var module = CkanModule.FromJson(json);
+        PrivateSourceRef? privateSource = null;
+        if (distribution == "private-github")
+        {
+            if (!Core.Private.InviteCode.IsValidRepo(src.Distribution.Repo))
+            {
+                throw new LauncherException(ErrorCode.InvalidPack, $"Custom package {src.Id}: private-github distribution needs a repo (owner/name).");
+            }
+            privateSource = new PrivateSourceRef { Repo = src.Distribution.Repo!, Tag = PrivateTag(src.Distribution.TagPrefix, version), Asset = fileName };
+        }
         var artifact = new ArtifactRef
         {
             Sha256 = sha256, Sha1 = sha1, Size = bytes.Length, Urls = lockUrls,
-            Distribution = distribution == "private-sideload" ? "private-sideload" : "download",
+            // Old launchers only know "private-sideload": they show the hand-over prompt and ignore Private.
+            Distribution = IsPrivate(distribution) ? "private-sideload" : "download",
             FileName = fileName,
+            Private = privateSource,
         };
         var locked = RegistryLockBuilder.FromModule(module, autoInstalled: false, ModuleOrigin.Custom, artifact);
         return new Built(src, version, zipPath, fileName, sha256, sha1, bytes.Length, installSize, locked, module, warnings);
     }
+
+    public static bool IsPrivate(string distributionKind) => distributionKind is "private-sideload" or "private-github";
+
+    /// <summary>Release tag for a private package: prefix + version with anything outside [A-Za-z0-9._-] replaced by '_'.</summary>
+    public static string PrivateTag(string? prefix, string version)
+        => (prefix ?? string.Empty) + Regex.Replace(version, "[^A-Za-z0-9._-]", "_");
 
     private static string ResolveVersion(CustomPackageSource src, string sourceDir, string packDir, bool allowDirty, List<string> warnings)
     {
@@ -164,13 +183,20 @@ public static class CustomPackageBuilder
 
     private static string Git(string repo, string args)
     {
-        var psi = new ProcessStartInfo("git", $"-C \"{repo}\" {args}") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true };
+        var psi = new ProcessStartInfo("git") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true };
+        psi.ArgumentList.Add("-C");
+        psi.ArgumentList.Add(repo.TrimEnd('\\', '/'));
+        foreach (var a in args.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        {
+            psi.ArgumentList.Add(a);
+        }
         using var p = Process.Start(psi) ?? throw new LauncherException(ErrorCode.InvalidPack, "git is not available.");
+        var stderr = p.StandardError.ReadToEndAsync(); // read both streams concurrently: no pipe deadlock
         var output = p.StandardOutput.ReadToEnd().Trim();
         p.WaitForExit();
         if (p.ExitCode != 0)
         {
-            throw new LauncherException(ErrorCode.InvalidPack, $"git {args} failed in {repo}: {p.StandardError.ReadToEnd().Trim()}");
+            throw new LauncherException(ErrorCode.InvalidPack, $"git {args} failed in {repo}: {stderr.GetAwaiter().GetResult().Trim()}");
         }
         return output;
     }

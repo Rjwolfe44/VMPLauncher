@@ -1,59 +1,134 @@
+using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using VmpLauncher.App.Services;
 using VmpLauncher.Core;
+using VmpLauncher.Core.Diagnostics;
 
 namespace VmpLauncher.App.ViewModels;
+
+public partial class PrivateRepoRow : ObservableObject
+{
+    public required string Repo { get; init; }
+    [ObservableProperty] private string _status = "Not checked";
+    [ObservableProperty] private string _statusKind = "neutral";
+}
 
 public partial class SettingsViewModel : ObservableObject
 {
     private readonly AppSettingsStore _settings;
     private readonly LauncherPaths _paths;
+    private readonly LauncherService _launcher;
+    private readonly IAppNavigator _navigation;
 
-    public SettingsViewModel(AppSettingsStore settings, LauncherPaths paths)
+    public SettingsViewModel(AppSettingsStore settings, LauncherPaths paths, LauncherService launcher, IAppNavigator navigation)
     {
         _settings = settings;
         _paths = paths;
+        _launcher = launcher;
+        _navigation = navigation;
         var s = settings.Current;
-        SourceKspPath = s.SourceKspPath ?? string.Empty;
-        ProfileRoot = s.ProfileRoot ?? Path.Combine(paths.ProfilesDir, s.ActiveProfileId);
-        CacheDir = s.CacheDirOverride ?? paths.CacheDir;
-        LocalPackDir = s.LocalPackDir ?? string.Empty;
-        CatalogUrl = s.CatalogUrl ?? PackCatalogService.DefaultCatalogUrl;
-        BorderlessWindow = s.BorderlessWindow;
-        MinimizeWhilePlaying = s.MinimizeWhilePlaying;
-        DisclaimerAccepted = s.DisclaimerAccepted;
-        AutoCheckUpdates = s.AutoCheckUpdates;
-        BetaChannel = s.UpdateChannel == "beta";
-        TextScalePercent = (int)Math.Round(s.TextScale * 100);
+        _sourceKspPath = s.SourceKspPath ?? "(not chosen)";
+        _profileRoot = launcher.ProfilePaths.Root;
+        _cacheDir = s.CacheDirOverride ?? paths.CacheDir;
+        _localPackDir = s.LocalPackDir ?? string.Empty;
+        _catalogUrl = s.CatalogUrl ?? PackCatalogService.DefaultCatalogUrl;
+        _borderlessWindow = s.BorderlessWindow;
+        _minimizeWhilePlaying = s.MinimizeWhilePlaying;
+        _disclaimerAccepted = s.DisclaimerAccepted;
+        _autoCheckUpdates = s.AutoCheckUpdates;
+        _autoUpdatePack = s.AutoUpdatePack;
+        _betaChannel = s.UpdateChannel == "beta";
+        _textScalePercent = (int)Math.Round(s.TextScale * 100);
+        launcher.PrivateMods.Changed += LoadRepos;
+        LoadRepos();
     }
 
     public string DataRoot => _paths.DataRoot;
     public string LogsDir => _paths.LogsDir;
+    public ObservableCollection<PrivateRepoRow> PrivateRepos { get; } = new();
 
-    [ObservableProperty] private string _sourceKspPath = string.Empty;
-    [ObservableProperty] private string _profileRoot = string.Empty;
-    [ObservableProperty] private string _cacheDir = string.Empty;
-    [ObservableProperty] private string _localPackDir = string.Empty;
-    [ObservableProperty] private string _catalogUrl = string.Empty;
+    [ObservableProperty] private string _sourceKspPath;
+    [ObservableProperty] private string _profileRoot;
+    [ObservableProperty] private string _cacheDir;
+    [ObservableProperty] private string _localPackDir;
+    [ObservableProperty] private string _catalogUrl;
     [ObservableProperty] private bool _borderlessWindow;
     [ObservableProperty] private bool _minimizeWhilePlaying;
     [ObservableProperty] private bool _disclaimerAccepted;
     [ObservableProperty] private bool _autoCheckUpdates;
+    [ObservableProperty] private bool _autoUpdatePack;
     [ObservableProperty] private bool _betaChannel;
     [ObservableProperty] private int _textScalePercent = 100;
     [ObservableProperty] private string _cacheSize = string.Empty;
+    [ObservableProperty] private string _inviteText = string.Empty;
+    [ObservableProperty] private string _inviteResult = string.Empty;
+    [ObservableProperty] private string _inviteResultKind = "neutral";
+    [ObservableProperty] private bool _hasPrivateRepos;
 
     partial void OnBorderlessWindowChanged(bool value) => _settings.Update(s => s with { BorderlessWindow = value });
     partial void OnMinimizeWhilePlayingChanged(bool value) => _settings.Update(s => s with { MinimizeWhilePlaying = value });
     partial void OnDisclaimerAcceptedChanged(bool value) => _settings.Update(s => s with { DisclaimerAccepted = value });
     partial void OnAutoCheckUpdatesChanged(bool value) => _settings.Update(s => s with { AutoCheckUpdates = value });
+    partial void OnAutoUpdatePackChanged(bool value) => _settings.Update(s => s with { AutoUpdatePack = value });
     partial void OnBetaChannelChanged(bool value) => _settings.Update(s => s with { UpdateChannel = value ? "beta" : "win" });
     partial void OnTextScalePercentChanged(int value) => _settings.Update(s => s with { TextScale = Math.Clamp(value, 100, 200) / 100.0 });
-    partial void OnLocalPackDirChanged(string value) => _settings.Update(s => s with { LocalPackDir = string.IsNullOrWhiteSpace(value) ? null : value });
-    partial void OnCatalogUrlChanged(string value) => _settings.Update(s => s with { CatalogUrl = string.IsNullOrWhiteSpace(value) || value == PackCatalogService.DefaultCatalogUrl ? null : value });
+    partial void OnLocalPackDirChanged(string value) => _settings.Update(s => s with { LocalPackDir = string.IsNullOrWhiteSpace(value) ? null : value.Trim() });
+    partial void OnCatalogUrlChanged(string value) => _settings.Update(s => s with { CatalogUrl = string.IsNullOrWhiteSpace(value) || value.Trim() == PackCatalogService.DefaultCatalogUrl ? null : value.Trim() });
+
+    private void LoadRepos()
+    {
+        PrivateRepos.Clear();
+        foreach (var repo in _settings.Current.PrivateRepos)
+        {
+            PrivateRepos.Add(new PrivateRepoRow { Repo = repo, Status = _launcher.PrivateMods.HasAccess(repo) ? "Invite saved" : "No access", StatusKind = _launcher.PrivateMods.HasAccess(repo) ? "ok" : "warn" });
+        }
+        HasPrivateRepos = PrivateRepos.Count > 0;
+    }
+
+    [RelayCommand]
+    private async Task CheckReposAsync(CancellationToken ct)
+    {
+        foreach (var row in PrivateRepos)
+        {
+            row.Status = "Checking…";
+            row.StatusKind = "checking";
+            var r = await _launcher.PrivateMods.CheckAccessAsync(row.Repo, ct);
+            row.Status = r.Message;
+            row.StatusKind = r.State == Core.Private.GitHubPrivateReleases.AccessState.Ok ? "ok" : "error";
+        }
+    }
+
+    [RelayCommand]
+    private void ApplyInvite()
+    {
+        try
+        {
+            var invite = _launcher.PrivateMods.ApplyInvite(InviteText, _launcher.PasswordKey);
+            InviteText = string.Empty;
+            InviteResultKind = "ok";
+            InviteResult = (invite.Repo, invite.ServerPassword) switch
+            {
+                ({ } repo, { }) => $"Saved: private mods from {repo} and the server password.",
+                ({ } repo, null) => $"Saved: private mods from {repo}.",
+                (null, { }) => "Saved: the server password.",
+                _ => "The invite was empty.",
+            };
+        }
+        catch (LauncherException ex)
+        {
+            InviteResultKind = "error";
+            InviteResult = ex.Message;
+        }
+    }
+
+    [RelayCommand]
+    private void ForgetRepo(PrivateRepoRow row) => _launcher.PrivateMods.Forget(row.Repo);
+
+    [RelayCommand]
+    private void RunSetup() => _navigation.Navigate(AppPage.Welcome);
 
     [RelayCommand]
     private void OpenLogs() => Process.Start(new ProcessStartInfo("explorer.exe", $"\"{_paths.LogsDir}\"") { UseShellExecute = true });
@@ -72,6 +147,9 @@ public partial class SettingsViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private void ClearLocalPack() => LocalPackDir = string.Empty;
+
+    [RelayCommand]
     private void BrowseCache()
     {
         var dlg = new Microsoft.Win32.OpenFolderDialog { Title = "Choose the download cache folder (an existing CKAN cache works)" };
@@ -87,8 +165,18 @@ public partial class SettingsViewModel : ObservableObject
     {
         var dir = CacheDir;
         CacheSize = "measuring…";
-        var size = await Task.Run(() => Directory.Exists(dir) ? new DirectoryInfo(dir).EnumerateFiles("*", SearchOption.AllDirectories).Sum(f => f.Length) : 0L);
-        CacheSize = Format.Bytes(size);
+        var size = await Task.Run(() =>
+        {
+            try
+            {
+                return Directory.Exists(dir) ? new DirectoryInfo(dir).EnumerateFiles("*", SearchOption.AllDirectories).Sum(f => f.Length) : 0L;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                return -1L;
+            }
+        });
+        CacheSize = size < 0 ? "could not measure" : Format.Bytes(size);
     }
 }
 
@@ -112,12 +200,11 @@ public partial class AboutViewModel : ObservableObject
     public string Runtime => System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription;
     public string Os => Environment.OSVersion.VersionString;
 
-
     public string Notices =>
         "VMP Launcher is free software by Rjwolfe44.\n" +
-        "Bundled components: CKAN core (MIT, KSP-CKAN contributors) · WPF-UI (MIT, lepo.co) · Velopack (MIT) · " +
-        "CommunityToolkit.Mvvm (MIT, .NET Foundation) · Lidgren.Network (MIT, Michael Lidgren) · Microsoft.Extensions (MIT).\n" +
-        "Kerbal Space Program and its DLC are property of their owners and are never redistributed by this launcher.";
+        "Bundled components: CKAN core (MIT, KSP-CKAN contributors), WPF-UI (MIT, lepo.co), Velopack (MIT), " +
+        "CommunityToolkit.Mvvm (MIT, .NET Foundation), Lidgren.Network (MIT, Michael Lidgren), Microsoft.Extensions (MIT).\n" +
+        "Kerbal Space Program and its DLC belong to their owners and are never redistributed by this launcher.";
 
     [RelayCommand]
     private void OpenRepo() => Process.Start(new ProcessStartInfo("https://github.com/Rjwolfe44/VMPLauncher") { UseShellExecute = true });

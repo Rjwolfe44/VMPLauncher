@@ -42,6 +42,8 @@ public sealed class FixtureRepo
         Add("F", "1.0", new() { ["GameData/F/F.cfg"] = "F" });
         Add("Clash", "1.0", new() { ["GameData/A/A.dll"] = "CLASH" });
         Add("Epoch", "1:2.0", new() { ["GameData/Epoch/e.cfg"] = "epoch" });
+        Add("Root", "1.0", new() { ["Root/rootfile.txt"] = "root" }, install: """[ { "file": "Root/rootfile.txt", "install_to": "GameRoot" } ]""");
+        Add("Dirs", "1.0", new() { ["GameData/Dirs/d.cfg"] = "dirs" }, emptyDirs: new[] { "GameData/Dirs/Empty/" });
     }
 
     public string ArchiveDir { get; }
@@ -51,13 +53,17 @@ public sealed class FixtureRepo
     public Module Get(string id, string version = "1.0") => this[id, version];
     public IEnumerable<Module> All => _modules.Values;
 
-    private void Add(string id, string version, Dictionary<string, string> files, string[]? depends = null, string[]? conflicts = null, string[]? provides = null)
+    private void Add(string id, string version, Dictionary<string, string> files, string[]? depends = null, string[]? conflicts = null, string[]? provides = null, string? install = null, string[]? emptyDirs = null)
     {
         var fileName = $"{id}-{version.Replace(':', '_')}.zip";
         var zipPath = Path.Combine(ArchiveDir, fileName);
         using (var fs = new FileStream(zipPath, FileMode.Create))
         using (var zip = new ZipArchive(fs, ZipArchiveMode.Create))
         {
+            foreach (var dir in emptyDirs ?? Array.Empty<string>())
+            {
+                zip.CreateEntry(dir).LastWriteTime = new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero);
+            }
             foreach (var (path, content) in files.OrderBy(f => f.Key, StringComparer.Ordinal))
             {
                 var e = zip.CreateEntry(path, CompressionLevel.Optimal);
@@ -71,6 +77,7 @@ public sealed class FixtureRepo
         var sha256 = Sha256Util.HashBytes(bytesAll);
         var sha1 = Convert.ToHexString(SHA1.HashData(bytesAll));
         var installSize = files.Values.Sum(c => c.Length + 1 + 2048);
+        var installJson = install ?? $$"""[ { "find": "{{id}}", "install_to": "GameData" } ]""";
         var json = $$"""
             {
               "spec_version": "v1.34",
@@ -87,7 +94,7 @@ public sealed class FixtureRepo
               "download_content_type": "application/zip",
               "install_size": {{installSize}},
               "release_date": "2026-01-01T00:00:00Z",
-              "install": [ { "find": "{{id}}", "install_to": "GameData" } ]
+              "install": {{installJson}}
               {{Rel("depends", depends)}}{{Rel("conflicts", conflicts)}}{{(provides is null ? "" : $", \"provides\": [{string.Join(", ", provides.Select(p => $"\"{p}\""))}]")}}
             }
             """;
@@ -103,18 +110,27 @@ public sealed class FixtureRepo
         => names is null ? string.Empty : $", \"{kind}\": [{string.Join(", ", names.Select(n => $"{{ \"name\": \"{n}\" }}"))}]";
 
     /// <summary>Writes a lock + inventory for the given modules into <paramref name="outDir"/> and returns the lock path.</summary>
-    public string WriteLock(string outDir, string packVersion, IEnumerable<Module> modules, IEnumerable<LockOverride>? overrides = null, FileRules? rules = null, IEnumerable<InventoryEntry>? extraInventory = null, IEnumerable<string>? rootInstallOwners = null)
+    /// <param name="autoInstalled">Identifiers locked as auto-installed (CKAN may remove them when nothing depends on them).</param>
+    /// <param name="privateIds">Identifiers whose archive is a private sideload (no download URL in the lock).</param>
+    public string WriteLock(string outDir, string packVersion, IEnumerable<Module> modules, IEnumerable<LockOverride>? overrides = null, FileRules? rules = null, IEnumerable<InventoryEntry>? extraInventory = null, IEnumerable<string>? rootInstallOwners = null,
+        IEnumerable<string>? autoInstalled = null, IEnumerable<string>? privateIds = null)
     {
         Directory.CreateDirectory(outDir);
         rules ??= FileRules.Default;
         var ruleSet = new FileRuleSet(rules);
         var game = new KerbalSpaceProgram();
         var indexer = new ArchiveContentIndexer(Path.Combine(outDir, "capture-cache.json"), game);
+        var auto = new HashSet<string>(autoInstalled ?? Array.Empty<string>(), StringComparer.Ordinal);
+        var privates = new HashSet<string>(privateIds ?? Array.Empty<string>(), StringComparer.Ordinal);
         var locked = new List<LockedModule>();
         var files = new List<InventoryEntry>();
         foreach (var m in modules.OrderBy(m => m.Id, StringComparer.Ordinal))
         {
-            var lm = RegistryLockBuilder.FromModule(m.Ckan, autoInstalled: false, ModuleOrigin.CkanMeta);
+            var lm = RegistryLockBuilder.FromModule(m.Ckan, autoInstalled: auto.Contains(m.Id), ModuleOrigin.CkanMeta);
+            if (privates.Contains(m.Id))
+            {
+                lm = lm with { Artifact = lm.Artifact! with { Urls = Array.Empty<string>(), Distribution = "private-sideload", FileName = Path.GetFileName(m.ZipPath) } };
+            }
             locked.Add(lm);
             foreach (var ef in indexer.Index(m.Ckan, m.ZipPath, lm.MetadataSha256))
             {

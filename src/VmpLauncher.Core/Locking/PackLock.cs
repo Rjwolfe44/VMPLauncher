@@ -108,6 +108,23 @@ public sealed record ArtifactRef
     public string Distribution { get; init; } = "download";
     /// <summary>Suggested file name, mainly for sideload prompts.</summary>
     public string? FileName { get; init; }
+    /// <summary>
+    /// For private packages: where a launcher holding a read-only access token can fetch the file automatically.
+    /// Older launchers ignore this field and fall back to the hand-over prompt, so it is safe to add.
+    /// </summary>
+    public PrivateSourceRef? Private { get; init; }
+}
+
+/// <summary>A private package's home: a release asset in a private GitHub repository.</summary>
+public sealed record PrivateSourceRef
+{
+    /// <summary>Only "github-release" for now.</summary>
+    public string Kind { get; init; } = "github-release";
+    /// <summary>owner/name of the private repository.</summary>
+    public required string Repo { get; init; }
+    public required string Tag { get; init; }
+    /// <summary>Release asset file name.</summary>
+    public required string Asset { get; init; }
 }
 
 public sealed record LockOverride

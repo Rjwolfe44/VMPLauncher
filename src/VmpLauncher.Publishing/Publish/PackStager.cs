@@ -38,6 +38,14 @@ public sealed class PackStager
         PackLock? PreviousLock,
         LockDiff? Diff);
 
+    /// <summary>LF line endings (the repository is byte-exact) and readable escaping for re-written JSON.</summary>
+    private static readonly JsonSerializerOptions JsonOut = new()
+    {
+        WriteIndented = true,
+        NewLine = "\n",
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+    };
+
     private static readonly string[] VersionFiles =
     {
         "inventory.json.gz", "KSPModControl.xml", "client-settings-template.xml", "capture-report.md",
@@ -50,7 +58,11 @@ public sealed class PackStager
         var packDir = Path.Combine(r.RepoDir, "packs", id);
         var versionDir = Path.Combine(packDir, version);
         var written = new List<string>();
-        Directory.CreateDirectory(versionDir);
+        if (Directory.Exists(versionDir))
+        {
+            // Published version folders are immutable: friends may already have installed from them.
+            throw new LauncherException(ErrorCode.InvalidPack, $"Version {version} of {id} was already published. Pick a new version.", RecoveryHint.None);
+        }
 
         // Previous state, for the diff and the changelog.
         PackLock? previous = null;
@@ -69,6 +81,22 @@ public sealed class PackStager
             throw new LauncherException(ErrorCode.InvalidPack, $"Version {version} is already the published version of {id}. Pick a new version.", RecoveryHint.None);
         }
         var diff = previous is null ? null : LockDiff.Compute(previous, r.Lock);
+        if (previous is not null)
+        {
+            // A download URL / private asset is named after the version; the same name with new bytes would leave the old
+            // file in place online while the lock promises the new hash, and every friend's install would fail.
+            var clashes = r.Lock.Ckan.Modules
+                .Where(m => m.Artifact?.FileName is not null)
+                .Join(previous.Ckan.Modules.Where(m => m.Artifact?.FileName is not null), m => (m.Identifier, m.Artifact!.FileName), p => (p.Identifier, p.Artifact!.FileName), (m, p) => (m, p))
+                .Where(x => x.m.Origin == ModuleOrigin.Custom && !Sha256Util.HexEquals(x.m.Artifact!.Sha256, x.p.Artifact!.Sha256))
+                .Select(x => $"{x.m.Identifier}: {x.m.Artifact!.FileName} was published with different content")
+                .ToList();
+            if (clashes.Count > 0)
+            {
+                throw new LauncherException(ErrorCode.InvalidPack, "A custom package was rebuilt without a new version, so its download name did not change. Bump its version (commit the change or raise the build number) and publish again.", RecoveryHint.None, details: clashes);
+            }
+        }
+        Directory.CreateDirectory(versionDir);
 
         // Immutable version folder.
         var lockName = Directory.EnumerateFiles(r.ExportVersionDir, "*.vmpack.lock.json").Select(Path.GetFileName).First()!;
@@ -115,8 +143,8 @@ public sealed class PackStager
                 }
                 node["server"]!["requiredBuild"] = required;
                 node["sequence"] = (node["sequence"]?.GetValue<long>() ?? 0) + 1;
-                node["issuedAt"] = r.Now.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss'Z'");
-                File.WriteAllText(serversPath, node.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) + "\n", new UTF8Encoding(false));
+                node["issuedAt"] = r.Now.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", System.Globalization.CultureInfo.InvariantCulture);
+                File.WriteAllText(serversPath, node.ToJsonString(JsonOut) + "\n", new UTF8Encoding(false));
                 r.Key.SignFile(serversPath);
                 written.Add(Rel(r.RepoDir, serversPath));
                 written.Add(Rel(r.RepoDir, serversPath + ".sig"));
@@ -139,7 +167,7 @@ public sealed class PackStager
         if (!arr.Any(e => e?["id"]?.GetValue<string>() == id))
         {
             arr.Add(new JsonObject { ["id"] = id, ["name"] = r.Lock.Pack.Name, ["path"] = $"packs/{id}", ["bannerUrl"] = null, ["minLauncherVersion"] = "0.1.0" });
-            File.WriteAllText(catalog, arr.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) + "\n", new UTF8Encoding(false));
+            File.WriteAllText(catalog, arr.ToJsonString(JsonOut) + "\n", new UTF8Encoding(false));
             written.Add("catalog.json");
         }
         var share = Path.Combine(packDir, "share", $"{id}.vmpack");
@@ -162,7 +190,7 @@ public sealed class PackStager
     public static string BuildChangelogEntry(string version, string? notes, LockDiff? diff, PackLock lk, string policySummary, DateTimeOffset now)
     {
         var sb = new StringBuilder();
-        sb.Append("## ").Append(version).Append(" (").Append(now.ToString("yyyy-MM-dd")).AppendLine(")");
+        sb.Append("## ").Append(version).Append(" (").Append(now.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)).AppendLine(")");
         sb.AppendLine();
         if (!string.IsNullOrWhiteSpace(notes))
         {

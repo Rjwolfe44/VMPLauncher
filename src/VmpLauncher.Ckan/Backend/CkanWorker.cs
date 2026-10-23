@@ -10,6 +10,7 @@ public sealed class CkanWorker : IDisposable
 {
     private readonly BlockingCollection<Action> _queue = new();
     private readonly Thread _thread;
+    private volatile bool _disposed;
 
     public CkanWorker()
     {
@@ -19,18 +20,26 @@ public sealed class CkanWorker : IDisposable
 
     public bool IsOnWorkerThread => Thread.CurrentThread == _thread;
 
+    /// <summary>How long <see cref="Dispose"/> waits for the work item that is running; tests shorten it.</summary>
+    internal TimeSpan DisposeTimeout { get; init; } = TimeSpan.FromSeconds(5);
+
+    /// <summary>True while the worker thread runs (it ends after <see cref="Dispose"/> once the running item returns).</summary>
+    internal bool IsWorkerAlive => _thread.IsAlive;
+
     public Task<T> RunAsync<T>(Func<T> work, CancellationToken ct = default)
     {
         if (IsOnWorkerThread)
         {
             return Task.FromResult(work());
         }
+        ObjectDisposedException.ThrowIf(_disposed, this);
         var tcs = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
-        _queue.Add(() =>
+        void Execute()
         {
-            if (ct.IsCancellationRequested)
+            // Work still queued when the worker is disposed is cancelled, not run.
+            if (_disposed || ct.IsCancellationRequested)
             {
-                tcs.TrySetCanceled(ct);
+                tcs.TrySetCanceled(ct.IsCancellationRequested ? ct : CancellationToken.None);
                 return;
             }
             try
@@ -45,7 +54,16 @@ public sealed class CkanWorker : IDisposable
             {
                 tcs.TrySetException(ex);
             }
-        }, CancellationToken.None);
+        }
+        try
+        {
+            _queue.Add(Execute, CancellationToken.None);
+        }
+        catch (InvalidOperationException)
+        {
+            // Dispose completed the queue between the check above and the Add.
+            throw new ObjectDisposedException(nameof(CkanWorker));
+        }
         return tcs.Task;
     }
 
@@ -66,8 +84,27 @@ public sealed class CkanWorker : IDisposable
 
     public void Dispose()
     {
+        if (_disposed)
+        {
+            return;
+        }
+        _disposed = true;
         _queue.CompleteAdding();
-        _thread.Join(TimeSpan.FromSeconds(5));
-        _queue.Dispose();
+        // Cancel what is still queued (each item sees _disposed); the item that is running finishes on its own.
+        while (_queue.TryTake(out var pending))
+        {
+            pending();
+        }
+        if (IsOnWorkerThread)
+        {
+            return;
+        }
+        if (_thread.Join(DisposeTimeout))
+        {
+            _queue.Dispose();
+        }
+        // Otherwise the worker is still inside a CKAN call. Disposing the queue under it would throw
+        // ObjectDisposedException on that thread (and end the process) once the call returns; instead it drains the
+        // completed queue and exits by itself. The queue is left to the garbage collector.
     }
 }

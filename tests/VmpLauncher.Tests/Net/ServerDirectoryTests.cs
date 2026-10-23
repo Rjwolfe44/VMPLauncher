@@ -28,10 +28,16 @@ internal sealed class FakeHttp : HttpMessageHandler
     public Dictionary<string, Func<HttpRequestMessage, HttpResponseMessage>> Routes { get; } = new();
     public List<HttpRequestMessage> Requests { get; } = [];
 
+    /// <summary>Exact URL first, then the same URL without its query string (so cache-busted retries reach the same route; the handler can inspect the query).</summary>
     protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
-        Requests.Add(request);
-        return Task.FromResult(Routes.TryGetValue(request.RequestUri!.AbsoluteUri, out var f) ? f(request) : new HttpResponseMessage(HttpStatusCode.NotFound));
+        lock (Requests)
+        {
+            Requests.Add(request);
+        }
+        var uri = request.RequestUri!;
+        var found = Routes.TryGetValue(uri.AbsoluteUri, out var f) || Routes.TryGetValue(uri.GetLeftPart(UriPartial.Path), out f);
+        return Task.FromResult(found ? f!(request) : new HttpResponseMessage(HttpStatusCode.NotFound));
     }
 }
 
@@ -208,5 +214,163 @@ public sealed class ServerDirectoryTests : IDisposable
         await c.FetchAsync(new Uri(Url));
         File.WriteAllText(c.CacheFile, Json(99));
         Assert.Null(c.LoadCached());
+    }
+
+    [Theory]
+    [InlineData("https://example.test/vmp/servers.json", "https://example.test/vmp/servers.json?vmpl=42")]
+    [InlineData("https://example.test/vmp/servers.json?a=b", "https://example.test/vmp/servers.json?a=b&vmpl=42")]
+    public void Cache_buster_is_appended_to_the_query(string url, string expected)
+        => Assert.Equal(expected, ServerDirectoryClient.WithCacheBuster(new Uri(url), "42").AbsoluteUri);
+
+    [Fact]
+    public async Task Signature_mismatch_is_retried_once_with_the_same_cache_buster_on_both_urls()
+    {
+        // The CDN still serves the previous .sig for the plain URL right after a push; a cache-busted URL gets the new one.
+        var bytes = Encoding.UTF8.GetBytes(Json(6));
+        _http.Routes[Url] = _ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(bytes) };
+        _http.Routes[Url + ".sig"] = req => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(req.RequestUri!.Query.Contains("vmpl=", StringComparison.Ordinal)
+                ? HashVerifier.Sign(bytes)
+                : HashVerifier.Sign(Encoding.UTF8.GetBytes(Json(5)))),
+        };
+
+        var r = await Client().FetchAsync(new Uri(Url));
+
+        Assert.False(r.IsFromCache);
+        Assert.Null(r.Warning);
+        Assert.Equal(6, r.Directory.Sequence);
+        var uris = _http.Requests.Select(q => q.RequestUri!).ToList();
+        Assert.Equal(4, uris.Count); // doc, sig, then doc + sig again
+        var busted = uris.Where(u => u.Query.Contains("vmpl=", StringComparison.Ordinal)).ToList();
+        Assert.Equal(2, busted.Count);
+        Assert.Equal(busted[0].Query, busted[1].Query);
+        Assert.Equal([Url, Url + ".sig"], busted.Select(u => u.GetLeftPart(UriPartial.Path)).ToArray());
+    }
+
+    [Fact]
+    public async Task Persistent_signature_mismatch_with_a_cache_says_mid_update_or_tampered_and_keeps_the_saved_copy()
+    {
+        Serve(Json(5));
+        var c = Client();
+        await c.FetchAsync(new Uri(Url));
+        _http.Requests.Clear();
+
+        Serve(Json(6), signature: "{\"sha256\":\"00\"}");
+        var r = await c.FetchAsync(new Uri(Url));
+
+        Assert.True(r.IsFromCache);
+        Assert.Equal(5, r.Directory.Sequence);
+        Assert.Contains("mid-update or tampered", r.Warning);
+        Assert.Contains("using the saved copy", r.Warning);
+        Assert.Equal(4, _http.Requests.Count); // exactly one retry
+    }
+
+    [Fact]
+    public async Task Persistent_signature_mismatch_without_a_cache_is_a_Tampered_error_that_mentions_mid_update()
+    {
+        Serve(Json(5), signature: "{\"sha256\":\"00\"}");
+        var ex = await Assert.ThrowsAsync<LauncherException>(() => Client().FetchAsync(new Uri(Url)));
+        Assert.Equal(ErrorCode.Tampered, ex.Code);
+        Assert.Contains("mid-update", ex.Message);
+    }
+
+    [Fact]
+    public async Task Rollback_floor_survives_a_cache_that_no_longer_verifies()
+    {
+        Serve(Json(7));
+        var c = Client();
+        await c.FetchAsync(new Uri(Url));
+        Assert.True(File.Exists(c.SequenceFile));
+
+        // Torn / tampered cache: the pair no longer verifies, so the old code lost its anti-rollback memory here.
+        File.WriteAllText(c.CacheFile, Json(99));
+        Assert.Null(c.LoadCached());
+
+        Serve(Json(6));
+        var ex = await Assert.ThrowsAsync<LauncherException>(() => c.FetchAsync(new Uri(Url)));
+        Assert.Equal(ErrorCode.Tampered, ex.Code);
+        Assert.Contains("not newer", ex.Message);
+
+        // Same sequence but different bytes is also refused; the exact list that set the floor is fine.
+        Serve(Json(7).Replace("Welcome", "Changed", StringComparison.Ordinal));
+        await Assert.ThrowsAsync<LauncherException>(() => c.FetchAsync(new Uri(Url)));
+        Serve(Json(7));
+        Assert.Equal(7, (await c.FetchAsync(new Uri(Url))).Directory.Sequence);
+        Serve(Json(8));
+        Assert.Equal(8, (await c.FetchAsync(new Uri(Url))).Directory.Sequence);
+    }
+
+    [Fact]
+    public async Task Rollback_floor_survives_deleting_the_cached_copy()
+    {
+        Serve(Json(7));
+        var c = Client();
+        await c.FetchAsync(new Uri(Url));
+        File.Delete(c.CacheFile);
+        File.Delete(c.SignatureFile);
+        File.Delete(c.ETagFile);
+
+        Serve(Json(3));
+        await Assert.ThrowsAsync<LauncherException>(() => c.FetchAsync(new Uri(Url)));
+        Assert.Null(c.LoadCached());
+    }
+
+    [Fact]
+    public async Task A_cache_older_than_the_recorded_floor_is_not_trusted()
+    {
+        Serve(Json(5));
+        var c = Client();
+        await c.FetchAsync(new Uri(Url));
+        var oldDoc = File.ReadAllBytes(c.CacheFile);
+        var oldSig = File.ReadAllBytes(c.SignatureFile);
+        Serve(Json(9));
+        await c.FetchAsync(new Uri(Url));
+
+        // An attacker (or a bad restore) puts the older, validly signed pair back.
+        File.WriteAllBytes(c.CacheFile, oldDoc);
+        File.WriteAllBytes(c.SignatureFile, oldSig);
+
+        Assert.Null(c.LoadCached());
+    }
+
+    [Fact]
+    public async Task Floor_is_taken_from_a_verified_cache_when_no_sequence_file_exists_yet()
+    {
+        // Upgrade path: caches written by earlier launcher versions have no .seq file.
+        Serve(Json(7));
+        var c = Client();
+        await c.FetchAsync(new Uri(Url));
+        File.Delete(c.SequenceFile);
+
+        Serve(Json(6));
+        var older = await c.FetchAsync(new Uri(Url));
+        Assert.True(older.IsFromCache);
+        Assert.Contains("not newer", older.Warning);
+    }
+
+    [Fact]
+    public async Task Concurrent_clients_for_one_pack_never_corrupt_the_cache()
+    {
+        var clients = Enumerable.Range(1, 12).Select(seq =>
+        {
+            var http = new FakeHttp();
+            var bytes = Encoding.UTF8.GetBytes(Json(seq));
+            http.Routes[Url] = _ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(bytes) };
+            http.Routes[Url + ".sig"] = _ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(HashVerifier.Sign(bytes)) };
+            return new ServerDirectoryClient(new LauncherPaths(_root), "vmp-train-career", new HttpClient(http), new HashVerifier(), _time);
+        }).ToList();
+
+        for (var round = 0; round < 5; round++)
+        {
+            var results = await Task.WhenAll(clients.Select(c => Task.Run(() => c.FetchAsync(new Uri(Url)))));
+            Assert.All(results, r => Assert.NotNull(r.Directory));
+        }
+
+        var final = clients[0].LoadCached();
+        Assert.NotNull(final);
+        Assert.Equal(12, final!.Directory.Sequence);
+        Assert.StartsWith("12 ", File.ReadAllText(clients[0].SequenceFile), StringComparison.Ordinal);
+        Assert.Empty(System.IO.Directory.GetFiles(clients[0].CacheDirectory, "*.tmp"));
     }
 }

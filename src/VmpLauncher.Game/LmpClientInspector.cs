@@ -16,12 +16,36 @@ public static class LmpClientInspector
 {
     public static string DllPathFor(string gameDir) => System.IO.Path.Combine(gameDir, "GameData", "VladMultiplayer", "Plugins", "LmpClient.dll");
 
-    public static LmpClientInfo? Inspect(string gameDir)
+    /// <summary>
+    /// The installed client, or null when it is missing <b>or unreadable</b> (truncated/corrupt/locked DLL). Never throws
+    /// for a bad file; use <see cref="Inspect(string, out string?)"/> to tell "missing" from "unreadable".
+    /// </summary>
+    public static LmpClientInfo? Inspect(string gameDir) => Inspect(gameDir, out _);
+
+    /// <summary>
+    /// Like <see cref="Inspect(string)"/>, and <paramref name="unreadableReason"/> is non-null only when the DLL exists
+    /// but could not be read (null result + null reason = not installed).
+    /// </summary>
+    public static LmpClientInfo? Inspect(string gameDir, out string? unreadableReason)
     {
+        unreadableReason = null;
         var path = DllPathFor(gameDir);
-        return File.Exists(path) ? InspectDll(path) : null;
+        if (!File.Exists(path))
+        {
+            return null;
+        }
+        try
+        {
+            return InspectDll(path);
+        }
+        catch (Exception e) when (IsUnreadableImage(e))
+        {
+            unreadableReason = $"{System.IO.Path.GetFileName(path)} could not be read: {e.Message}";
+            return null;
+        }
     }
 
+    /// <summary>Reads one assembly. Throws <see cref="BadImageFormatException"/>, <see cref="InvalidOperationException"/> or <see cref="IOException"/> for a truncated or non-.NET file.</summary>
     public static LmpClientInfo InspectDll(string dllPath)
     {
         using var fs = File.OpenRead(dllPath);
@@ -49,6 +73,9 @@ public static class LmpClientInspector
         }
         return new LmpClientInfo(dllPath, info, asm.Version.ToString(), metadata);
     }
+
+    private static bool IsUnreadableImage(Exception e)
+        => e is BadImageFormatException or InvalidOperationException or IOException or UnauthorizedAccessException or ArgumentException;
 
     private static string? AttributeTypeName(MetadataReader md, CustomAttribute attr)
     {

@@ -1,4 +1,4 @@
-<Page
+<UserControl
     x:Class="VmpLauncher.App.Views.Pages.SettingsPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -7,68 +7,146 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d"
-    d:DataContext="{d:DesignInstance vm:SettingsViewModel}"
-    Title="Settings">
-    <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel Margin="{StaticResource Space.Page.Padding}" MaxWidth="900">
-            <TextBlock Style="{StaticResource Space.Style.Display}" Text="Settings" />
+    d:DataContext="{d:DesignInstance vm:SettingsViewModel}">
+    <UserControl.Resources>
+        <Style x:Key="SettingRow" TargetType="Grid">
+            <Setter Property="Margin" Value="0,6" />
+        </Style>
+    </UserControl.Resources>
+    <ScrollViewer Style="{StaticResource Space.PageScroll}">
+        <StackPanel Margin="{StaticResource Space.Page.Padding}" MaxWidth="920">
+            <TextBlock Style="{StaticResource Space.PageTitle}" Text="Settings" />
+            <TextBlock Style="{StaticResource Space.Style.Secondary}" Text="Changes save as you make them." />
 
+            <!-- Private mods -->
+            <Border Style="{StaticResource Space.Card}" Margin="0,20,0,0">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource Space.SectionTitle}" Text="Private mods and invite codes" />
+                    <TextBlock Style="{StaticResource Space.Style.Secondary}" Text="An invite code from the host gives this PC its private mods (downloaded and updated automatically) and can carry the server password. It is stored encrypted for your Windows account." />
+                    <Grid Margin="0,14,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <ui:TextBox Text="{Binding InviteText, UpdateSourceTrigger=PropertyChanged}" PlaceholderText="Paste an invite code (VMPINVITE1-...)" FontFamily="{StaticResource Space.Font.Mono}" AutomationProperties.Name="Invite code" />
+                        <ui:Button Grid.Column="1" Content="Use invite" Appearance="Primary" Command="{Binding ApplyInviteCommand}" Margin="8,0,0,0" Icon="{ui:SymbolIcon Key24}" />
+                    </Grid>
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0" Visibility="{Binding InviteResult, Converter={StaticResource NullToVisibility}}">
+                        <Ellipse Width="8" Height="8" Margin="0,0,8,0" VerticalAlignment="Center" Fill="{Binding InviteResultKind, Converter={StaticResource StatusKindToBrush}}" />
+                        <TextBlock Style="{StaticResource Space.Style.Caption}" Foreground="{StaticResource Space.Text.PrimaryBrush}" Text="{Binding InviteResult}" />
+                    </StackPanel>
+                    <ItemsControl ItemsSource="{Binding PrivateRepos}" Margin="0,12,0,0" Focusable="False">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:PrivateRepoRow}">
+                                <Border Padding="14,10" CornerRadius="10" Background="{StaticResource Space.Bg.ElevatedBrush}" Margin="0,0,0,6">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <ui:SymbolIcon Symbol="LockClosed24" Filled="True" Foreground="{StaticResource Space.AccentBrush}" Margin="0,0,12,0" VerticalAlignment="Center" />
+                                        <StackPanel Grid.Column="1">
+                                            <TextBlock Style="{StaticResource Space.Style.Mono}" Text="{Binding Repo}" />
+                                            <StackPanel Orientation="Horizontal">
+                                                <Ellipse Width="7" Height="7" Margin="0,0,6,0" VerticalAlignment="Center" Fill="{Binding StatusKind, Converter={StaticResource StatusKindToBrush}}" />
+                                                <TextBlock Style="{StaticResource Space.Style.Caption}" Text="{Binding Status}" />
+                                            </StackPanel>
+                                        </StackPanel>
+                                        <Button Grid.Column="2" Style="{StaticResource Space.Button.Link}" Content="Forget"
+                                                Command="{Binding DataContext.ForgetRepoCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" />
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <ui:Button Content="Test access" Command="{Binding CheckReposCommand}" Icon="{ui:SymbolIcon PlugConnected24}" HorizontalAlignment="Left" Margin="0,4,0,0"
+                               Visibility="{Binding HasPrivateRepos, Converter={StaticResource BoolToVisibility}}" />
+                </StackPanel>
+            </Border>
+
+            <!-- Pack and game -->
             <Border Style="{StaticResource Space.Card}" Margin="0,16,0,0">
                 <StackPanel>
-                    <TextBlock Style="{StaticResource Space.SectionTitle}" Text="Folders" />
-                    <TextBlock Style="{StaticResource Space.Style.Caption}" Text="Your KSP install" />
-                    <TextBlock Style="{StaticResource Space.Style.Mono}" Text="{Binding SourceKspPath}" Margin="0,2,0,10" />
-                    <TextBlock Style="{StaticResource Space.Style.Caption}" Text="Modded profile" />
-                    <TextBlock Style="{StaticResource Space.Style.Mono}" Text="{Binding ProfileRoot}" Margin="0,2,0,10" />
+                    <TextBlock Style="{StaticResource Space.SectionTitle}" Text="Pack and game" />
+                    <ui:ToggleSwitch Content="Install pack updates automatically when the launcher starts" IsChecked="{Binding AutoUpdatePack}" />
+                    <TextBlock Style="{StaticResource Space.Style.Caption}" Margin="44,2,0,10" Text="Skipped while KSP is running or when a private file is missing. Only changed mods are downloaded." />
+                    <ui:ToggleSwitch Content="Borderless window (-popupwindow)" IsChecked="{Binding BorderlessWindow}" Margin="0,4,0,0" />
+                    <ui:ToggleSwitch Content="Minimize the launcher while playing" IsChecked="{Binding MinimizeWhilePlaying}" Margin="0,10,0,0" />
+                    <ui:ToggleSwitch Content="VMP disclaimer accepted" IsChecked="{Binding DisclaimerAccepted}" Margin="0,10,0,0" />
+                </StackPanel>
+            </Border>
+
+            <!-- Folders -->
+            <Border Style="{StaticResource Space.Card}" Margin="0,16,0,0">
+                <StackPanel>
+                    <DockPanel>
+                        <ui:Button DockPanel.Dock="Right" Content="Run setup again" Command="{Binding RunSetupCommand}" Icon="{ui:SymbolIcon ArrowRepeatAll24}" />
+                        <TextBlock Style="{StaticResource Space.SectionTitle}" Text="Folders" />
+                    </DockPanel>
+                    <TextBlock Style="{StaticResource Space.Style.Caption}" Text="Your KSP install (read only)" Margin="0,4,0,0" />
+                    <TextBlock Style="{StaticResource Space.Style.Mono}" Text="{Binding SourceKspPath}" Margin="0,2,0,12" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip="{Binding SourceKspPath}" />
+                    <TextBlock Style="{StaticResource Space.Style.Caption}" Text="Modded copy (profile)" />
+                    <TextBlock Style="{StaticResource Space.Style.Mono}" Text="{Binding ProfileRoot}" Margin="0,2,0,12" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip="{Binding ProfileRoot}" />
                     <TextBlock Style="{StaticResource Space.Style.Caption}" Text="Download cache (an existing CKAN cache can be reused)" />
-                    <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
-                        <TextBlock Style="{StaticResource Space.Style.Mono}" Text="{Binding CacheDir}" VerticalAlignment="Center" />
-                        <ui:Button Content="Change…" Command="{Binding BrowseCacheCommand}" Margin="12,0,0,0" />
-                        <ui:Button Content="Measure" Command="{Binding MeasureCacheCommand}" Margin="8,0,0,0" />
-                        <TextBlock Style="{StaticResource Space.Style.Caption}" Text="{Binding CacheSize}" Margin="12,0,0,0" VerticalAlignment="Center" />
-                    </StackPanel>
-                    <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
+                    <Grid Margin="0,2,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource Space.Style.Mono}" Text="{Binding CacheDir}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip="{Binding CacheDir}" />
+                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource Space.Style.Caption}" Text="{Binding CacheSize}" Margin="12,0" VerticalAlignment="Center" />
+                            <ui:Button Content="Measure" Command="{Binding MeasureCacheCommand}" Margin="0,0,8,0" />
+                            <ui:Button Content="Change…" Command="{Binding BrowseCacheCommand}" />
+                        </StackPanel>
+                    </Grid>
+                    <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
                         <ui:Button Content="Open data folder" Command="{Binding OpenDataCommand}" Icon="{ui:SymbolIcon FolderOpen24}" />
                         <ui:Button Content="Open logs" Command="{Binding OpenLogsCommand}" Icon="{ui:SymbolIcon DocumentText24}" Margin="8,0,0,0" />
                     </StackPanel>
                 </StackPanel>
             </Border>
 
-            <Border Style="{StaticResource Space.Card}" Margin="0,16,0,0">
-                <StackPanel>
-                    <TextBlock Style="{StaticResource Space.SectionTitle}" Text="Game" />
-                    <ui:ToggleSwitch Content="Borderless window (-popupwindow)" IsChecked="{Binding BorderlessWindow}" />
-                    <ui:ToggleSwitch Content="Minimize the launcher while playing" IsChecked="{Binding MinimizeWhilePlaying}" Margin="0,8,0,0" />
-                    <ui:ToggleSwitch Content="VMP disclaimer accepted" IsChecked="{Binding DisclaimerAccepted}" Margin="0,8,0,0" />
-                </StackPanel>
-            </Border>
-
+            <!-- Appearance -->
             <Border Style="{StaticResource Space.Card}" Margin="0,16,0,0">
                 <StackPanel>
                     <TextBlock Style="{StaticResource Space.SectionTitle}" Text="Appearance" />
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Style="{StaticResource Space.Style.Body}" Text="Text size" VerticalAlignment="Center" Width="120" />
-                        <Slider Minimum="100" Maximum="200" TickFrequency="10" IsSnapToTickEnabled="True" Width="240" Value="{Binding TextScalePercent}" />
-                        <TextBlock Style="{StaticResource Space.Style.Caption}" Text="{Binding TextScalePercent, StringFormat={}{0}%}" Margin="12,0,0,0" VerticalAlignment="Center" />
-                    </StackPanel>
-                    <TextBlock Style="{StaticResource Space.Style.Caption}" Margin="0,6,0,0" Text="Mica backdrop follows Windows 11; high-contrast mode switches the theme automatically." />
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="120" />
+                            <ColumnDefinition Width="280" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource Space.Style.Body}" Text="Text size" VerticalAlignment="Center" />
+                        <Slider Grid.Column="1" Minimum="100" Maximum="200" TickFrequency="10" IsSnapToTickEnabled="True" Value="{Binding TextScalePercent}" VerticalAlignment="Center" AutomationProperties.Name="Text size" />
+                        <TextBlock Grid.Column="2" Style="{StaticResource Space.Style.Caption}" Text="{Binding TextScalePercent, StringFormat={}{0}%}" Margin="12,0,0,0" VerticalAlignment="Center" />
+                    </Grid>
+                    <TextBlock Style="{StaticResource Space.Style.Caption}" Margin="0,8,0,0" Text="Also follows Windows' own text size; high-contrast mode switches the theme automatically." />
                 </StackPanel>
             </Border>
 
+            <!-- Updates and source -->
             <Border Style="{StaticResource Space.Card}" Margin="0,16,0,0">
                 <StackPanel>
-                    <TextBlock Style="{StaticResource Space.SectionTitle}" Text="Updates and pack source" />
+                    <TextBlock Style="{StaticResource Space.SectionTitle}" Text="Launcher updates and pack source" />
                     <ui:ToggleSwitch Content="Check for launcher updates automatically" IsChecked="{Binding AutoCheckUpdates}" />
-                    <ui:ToggleSwitch Content="Beta channel" IsChecked="{Binding BetaChannel}" Margin="0,8,0,0" />
-                    <TextBlock Style="{StaticResource Space.Style.Caption}" Margin="0,14,0,0" Text="Pack catalog URL" />
+                    <ui:ToggleSwitch Content="Beta channel" IsChecked="{Binding BetaChannel}" Margin="0,10,0,0" />
+                    <TextBlock Style="{StaticResource Space.Style.Caption}" Margin="0,16,0,0" Text="Pack catalog URL" />
                     <ui:TextBox Text="{Binding CatalogUrl, UpdateSourceTrigger=LostFocus}" FontFamily="{StaticResource Space.Font.Mono}" Margin="0,4,0,0" />
-                    <TextBlock Style="{StaticResource Space.Style.Caption}" Margin="0,12,0,0" Text="Host / testing: use a local export folder instead of the online catalog" />
-                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                        <ui:TextBox Text="{Binding LocalPackDir, UpdateSourceTrigger=LostFocus}" Width="520" FontFamily="{StaticResource Space.Font.Mono}" PlaceholderText="(none)" />
-                        <ui:Button Content="Browse…" Command="{Binding BrowseLocalPackCommand}" Margin="8,0,0,0" />
-                    </StackPanel>
+                    <TextBlock Style="{StaticResource Space.Style.Caption}" Margin="0,14,0,0" Text="Host or testing only: install from a local export folder instead of the online catalog" />
+                    <Grid Margin="0,4,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <ui:TextBox Text="{Binding LocalPackDir, UpdateSourceTrigger=LostFocus}" FontFamily="{StaticResource Space.Font.Mono}" PlaceholderText="(none: use the online catalog)" />
+                        <ui:Button Grid.Column="1" Content="Browse…" Command="{Binding BrowseLocalPackCommand}" Margin="8,0,0,0" />
+                        <ui:Button Grid.Column="2" Content="Clear" Command="{Binding ClearLocalPackCommand}" Margin="8,0,0,0" />
+                    </Grid>
                 </StackPanel>
             </Border>
         </StackPanel>
     </ScrollViewer>
-</Page>
+</UserControl>

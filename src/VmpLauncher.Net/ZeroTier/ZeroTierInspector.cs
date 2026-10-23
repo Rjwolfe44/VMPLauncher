@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
@@ -49,7 +50,13 @@ public interface IZeroTierHost
     /// <summary>Contents of authtoken.secret, or null if missing/unreadable (it is admin-only by default).</summary>
     string? ReadAuthToken();
 
-    /// <summary>GET http://127.0.0.1:9993{path} with X-ZT1-Auth; null when the API is unreachable.</summary>
+    /// <summary>
+    /// Every distinct non-empty auth token found, best first (a per-user copy and the service's own can differ and only
+    /// one of them is accepted). The inspector tries them in order until the API stops answering 401.
+    /// </summary>
+    IReadOnlyList<string> ReadAuthTokens() => ReadAuthToken() is { Length: > 0 } token ? [token] : [];
+
+    /// <summary>GET http://127.0.0.1:{api port}{path} with X-ZT1-Auth; null when the API is unreachable. The port is ZeroTier's own (default 9993).</summary>
     Task<(HttpStatusCode Status, string Body)?> GetLocalApiAsync(string path, string authToken, CancellationToken cancellationToken);
 }
 
@@ -93,10 +100,20 @@ public sealed class ZeroTierInspector : IZeroTierInspector
         IPAddress? apiAddress = null;
         var apiAvailable = false;
         var apiNotJoined = false;
-        var token = _host.ReadAuthToken();
-        if (!string.IsNullOrWhiteSpace(token))
+        string? token = null;
+        (HttpStatusCode Status, string Body)? status = null;
+        foreach (var candidate in _host.ReadAuthTokens().Where(t => !string.IsNullOrWhiteSpace(t)))
         {
-            var status = await _host.GetLocalApiAsync("/status", token, cancellationToken).ConfigureAwait(false);
+            // A 401 means this particular token is stale or belongs to another install; try the next one.
+            token = candidate;
+            status = await _host.GetLocalApiAsync("/status", candidate, cancellationToken).ConfigureAwait(false);
+            if (status is not { Status: HttpStatusCode.Unauthorized })
+            {
+                break;
+            }
+        }
+        if (token is not null)
+        {
             if (status is { Status: HttpStatusCode.OK } s)
             {
                 apiAvailable = true;
@@ -208,11 +225,39 @@ public sealed class ZeroTierInspector : IZeroTierInspector
     }
 }
 
-/// <summary>Real machine access: Service Control Manager, NIC enumeration, authtoken.secret, local API on :9993.</summary>
+/// <summary>
+/// Real machine access: Service Control Manager, NIC enumeration, authtoken.secret, and the local API on the port ZeroTier
+/// records in <c>zerotier-one.port</c> (9993 unless it was changed).
+/// </summary>
 public sealed class WindowsZeroTierHost : IZeroTierHost
 {
     public const string ServiceName = "ZeroTierOneService";
+    public const int DefaultApiPort = 9993;
+    public const string TokenFileName = "authtoken.secret";
+    public const string PortFileName = "zerotier-one.port";
     private static readonly HttpClient s_http = new() { Timeout = TimeSpan.FromSeconds(3) };
+
+    private readonly IReadOnlyList<string> _dataDirs;
+    private readonly HttpClient _client;
+
+    public WindowsZeroTierHost()
+        : this(DefaultDataDirs(), null)
+    {
+    }
+
+    /// <param name="dataDirs">Directories that may hold <c>authtoken.secret</c> (and <c>zerotier-one.port</c>), best first.</param>
+    /// <param name="handler">Test seam for the local API HTTP traffic; null uses the shared client.</param>
+    internal WindowsZeroTierHost(IReadOnlyList<string> dataDirs, HttpMessageHandler? handler)
+    {
+        _dataDirs = dataDirs ?? throw new ArgumentNullException(nameof(dataDirs));
+        _client = handler is null ? s_http : new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(3) };
+    }
+
+    private static string[] DefaultDataDirs() =>
+    [
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ZeroTier"),
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "ZeroTier", "One"),
+    ];
 
     public ZeroTierServiceState GetServiceState()
     {
@@ -256,41 +301,70 @@ public sealed class WindowsZeroTierHost : IZeroTierHost
         }
     }
 
-    public string? ReadAuthToken()
+    public string? ReadAuthToken() => ReadAuthTokens() is [var first, ..] ? first : null;
+
+    public IReadOnlyList<string> ReadAuthTokens()
     {
-        var candidates = new[]
+        var tokens = new List<string>();
+        foreach (var dir in _dataDirs)
         {
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ZeroTier", "authtoken.secret"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "ZeroTier", "One", "authtoken.secret"),
-        };
-        foreach (var path in candidates)
-        {
-            try
+            // The ProgramData copy is admin-only by default; unreadable ones are skipped quietly.
+            if (ReadTokenFile(dir) is { } token && !tokens.Contains(token, StringComparer.Ordinal))
             {
-                if (File.Exists(path))
-                {
-                    var token = File.ReadAllText(path).Trim();
-                    if (token.Length > 0)
-                    {
-                        return token;
-                    }
-                }
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-                // The ProgramData copy is admin-only by default; skip quietly.
+                tokens.Add(token);
             }
         }
-        return null;
+        return tokens;
+    }
+
+    private static string? ReadTokenFile(string dir) => ReadTrimmed(Path.Combine(dir, TokenFileName)) is { Length: > 0 } token ? token : null;
+
+    /// <summary>The API port from <c>zerotier-one.port</c> in <paramref name="dir"/>, or null if absent or not a valid port.</summary>
+    internal static int? ReadPortFile(string dir)
+        => int.TryParse(ReadTrimmed(Path.Combine(dir, PortFileName)), NumberStyles.None, CultureInfo.InvariantCulture, out var port) && port is > 0 and <= 65535 ? port : null;
+
+    private static string? ReadTrimmed(string path)
+    {
+        try
+        {
+            return File.Exists(path) ? File.ReadAllText(path).Trim() : null;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// ZeroTier writes the port its API really listens on next to <c>authtoken.secret</c>. Prefer the data dir the token
+    /// came from, then any dir that has a port file, then the default 9993.
+    /// </summary>
+    internal int ResolveApiPort(string authToken)
+    {
+        foreach (var dir in _dataDirs)
+        {
+            if (string.Equals(ReadTokenFile(dir), authToken, StringComparison.Ordinal) && ReadPortFile(dir) is { } own)
+            {
+                return own;
+            }
+        }
+        foreach (var dir in _dataDirs)
+        {
+            if (ReadPortFile(dir) is { } any)
+            {
+                return any;
+            }
+        }
+        return DefaultApiPort;
     }
 
     public async Task<(HttpStatusCode Status, string Body)?> GetLocalApiAsync(string path, string authToken, CancellationToken cancellationToken)
     {
         try
         {
-            using var request = new HttpRequestMessage(HttpMethod.Get, new Uri("http://127.0.0.1:9993" + path));
+            using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(FormattableString.Invariant($"http://127.0.0.1:{ResolveApiPort(authToken)}{path}")));
             request.Headers.TryAddWithoutValidation("X-ZT1-Auth", authToken);
-            using var response = await s_http.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            using var response = await _client.SendAsync(request, cancellationToken).ConfigureAwait(false);
             var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
             return (response.StatusCode, body);
         }

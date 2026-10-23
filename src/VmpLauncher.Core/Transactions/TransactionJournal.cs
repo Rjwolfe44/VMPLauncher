@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using VmpLauncher.Core.Packs;
 using VmpLauncher.Core.Profiles;
 using VmpLauncher.Core.Serialization;
 
@@ -80,6 +81,15 @@ public sealed record SnapshotManifest
     public required IReadOnlyList<SnapshotEntry> Files { get; init; }
     /// <summary>Files copied (not linked): CKAN registry and launcher state, relative to the profile root.</summary>
     public required IReadOnlyList<string> CopiedStateFiles { get; init; }
+    /// <summary>The file rules the snapshot was taken with; a restore must use the same ones (null in older snapshots).</summary>
+    public FileRules? Rules { get; init; }
+    /// <summary>
+    /// Files directly in the game folder that the pack inventory before or after the transaction owns. They are the only
+    /// game-root files a restore may move to quarantine (stock files such as KSP_x64.exe are never candidates).
+    /// </summary>
+    public IReadOnlyList<string> RootFiles { get; init; } = Array.Empty<string>();
+    /// <summary>Directories under the managed roots at snapshot time (forward slashes); CKAN registers directories too, so a restore recreates them.</summary>
+    public IReadOnlyList<string> Directories { get; init; } = Array.Empty<string>();
 }
 
 /// <summary>p = game-relative path (forward slashes); s = size; m = mtime ticks; f = NTFS file id of the original.</summary>
