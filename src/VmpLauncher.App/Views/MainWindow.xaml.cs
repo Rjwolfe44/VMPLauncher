@@ -42,6 +42,7 @@ public partial class MainWindow : FluentWindow
         ViewModel = viewModel;
         DataContext = viewModel;
         InitializeComponent();
+        PlaceOnPrimaryMonitor();
 
         navigator.Attach(PageHost);
         snackbar.SetSnackbarPresenter(SnackbarPresenter);
@@ -74,6 +75,16 @@ public partial class MainWindow : FluentWindow
     }
 
     public MainWindowViewModel ViewModel { get; }
+
+    /// <summary>Centre on the primary monitor's work area (WPF's CenterScreen picks the monitor under the mouse).</summary>
+    private void PlaceOnPrimaryMonitor()
+    {
+        var area = SystemParameters.WorkArea; // primary monitor, device-independent pixels, minus the taskbar
+        Width = Math.Min(Width, Math.Max(MinWidth, area.Width - 32));
+        Height = Math.Min(Height, Math.Max(MinHeight, area.Height - 32));
+        Left = area.Left + Math.Max(0, (area.Width - Width) / 2);
+        Top = area.Top + Math.Max(0, (area.Height - Height) / 2);
+    }
 
     private void ShowOutcome(OperationOutcome o)
     {

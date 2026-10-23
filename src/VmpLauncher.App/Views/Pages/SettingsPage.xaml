@@ -71,7 +71,8 @@
                     <TextBlock Style="{StaticResource Space.SectionTitle}" Text="Pack and game" />
                     <ui:ToggleSwitch Content="Install pack updates automatically when the launcher starts" IsChecked="{Binding AutoUpdatePack}" />
                     <TextBlock Style="{StaticResource Space.Style.Caption}" Margin="44,2,0,10" Text="Skipped while KSP is running or when a private file is missing. Only changed mods are downloaded." />
-                    <ui:ToggleSwitch Content="Borderless window (-popupwindow)" IsChecked="{Binding BorderlessWindow}" Margin="0,4,0,0" />
+                    <ui:ToggleSwitch Content="Open KSP on the main monitor" IsChecked="{Binding KspOnMainMonitor}" Margin="0,4,0,0" />
+                    <ui:ToggleSwitch Content="Borderless window (-popupwindow)" IsChecked="{Binding BorderlessWindow}" Margin="0,10,0,0" />
                     <ui:ToggleSwitch Content="Minimize the launcher while playing" IsChecked="{Binding MinimizeWhilePlaying}" Margin="0,10,0,0" />
                     <ui:ToggleSwitch Content="VMP disclaimer accepted" IsChecked="{Binding DisclaimerAccepted}" Margin="0,10,0,0" />
                 </StackPanel>

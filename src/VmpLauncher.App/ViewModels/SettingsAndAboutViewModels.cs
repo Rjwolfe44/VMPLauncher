@@ -45,6 +45,7 @@ public partial class SettingsViewModel : ObservableObject
         _disclaimerAccepted = s.DisclaimerAccepted;
         _autoCheckUpdates = s.AutoCheckUpdates;
         _autoUpdatePack = s.AutoUpdatePack;
+        _kspOnMainMonitor = s.KspOnMainMonitor;
         _betaChannel = s.UpdateChannel == "beta";
         _textScalePercent = (int)Math.Round(s.TextScale * 100);
         launcher.PrivateMods.Changed += LoadRepos;
@@ -65,6 +66,7 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private bool _disclaimerAccepted;
     [ObservableProperty] private bool _autoCheckUpdates;
     [ObservableProperty] private bool _autoUpdatePack;
+    [ObservableProperty] private bool _kspOnMainMonitor;
     [ObservableProperty] private bool _betaChannel;
     [ObservableProperty] private int _textScalePercent = 100;
     [ObservableProperty] private string _cacheSize = string.Empty;
@@ -85,6 +87,7 @@ public partial class SettingsViewModel : ObservableObject
     partial void OnDisclaimerAcceptedChanged(bool value) => _settings.Update(s => s with { DisclaimerAccepted = value });
     partial void OnAutoCheckUpdatesChanged(bool value) => _settings.Update(s => s with { AutoCheckUpdates = value });
     partial void OnAutoUpdatePackChanged(bool value) => _settings.Update(s => s with { AutoUpdatePack = value });
+    partial void OnKspOnMainMonitorChanged(bool value) => _settings.Update(s => s with { KspOnMainMonitor = value });
     partial void OnBetaChannelChanged(bool value) => _settings.Update(s => s with { UpdateChannel = value ? "beta" : "win" });
     partial void OnTextScalePercentChanged(int value) => _settings.Update(s => s with { TextScale = Math.Clamp(value, 100, 200) / 100.0 });
     partial void OnLocalPackDirChanged(string value) => _settings.Update(s => s with { LocalPackDir = string.IsNullOrWhiteSpace(value) ? null : value.Trim() });

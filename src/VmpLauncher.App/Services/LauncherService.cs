@@ -310,7 +310,9 @@ public sealed class LauncherService : IDisposable
         var client = LmpClientInspector.Inspect(profile.GameDir);
         // -vmpjoin is always passed (older clients ignore it); the log says whether this client will act on it.
         _log.LogInformation("Launching KSP from {GameDir}; -vmpjoin {Route} (client {Build}, auto-join {Supported})", profile.GameDir, routeEntryName ?? "(none)", client?.ExactBuild, client?.SupportsAutoJoin == true ? "supported" : "not supported");
-        return KspLauncher.Launch(new KspLauncher.LaunchSpec(profile.GameDir, routeEntryName, s.BorderlessWindow, Array.Empty<string>()));
+        // Unity's -monitor is 1-based and 1 is the primary display; it overrides the monitor Unity remembered.
+        var extra = s.KspOnMainMonitor ? new[] { "-monitor", "1" } : Array.Empty<string>();
+        return KspLauncher.Launch(new KspLauncher.LaunchSpec(profile.GameDir, routeEntryName, s.BorderlessWindow, extra));
     }
 
     private (string Path, DateTime Stamp, PackLock Lock)? _installedLockCache;

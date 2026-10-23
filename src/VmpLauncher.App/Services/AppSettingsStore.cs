@@ -29,6 +29,8 @@ public sealed record AppSettings
     public List<string> PrivateRepos { get; init; } = new();
     /// <summary>Apply pack updates automatically when the launcher starts (only when nothing needs the user).</summary>
     public bool AutoUpdatePack { get; init; } = true;
+    /// <summary>Start KSP on the primary monitor (Unity otherwise reuses whatever monitor it ran on last).</summary>
+    public bool KspOnMainMonitor { get; init; } = true;
 }
 
 public sealed class AppSettingsStore
