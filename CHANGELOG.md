@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.2
+
+- Your downloads, game copy and settings now live in `%LOCALAPPDATA%\VmpLauncherData`, outside the program folder.
+  Before, they shared the folder Windows Setup and uninstall replace, so reinstalling the launcher could delete them.
+  Existing data moves over by itself the first time 0.2.2 starts (same drive, so it is instant).
+- Play: "Just launch KSP (no server)" starts the game with the pack's mods without joining. Play single-player, or
+  connect later from the VMP window.
+- Home no longer cancels its own first pack check at startup.
+
 ## 0.2.1
 
 - Mods you already have in a normal CKAN download cache are reused instead of downloaded again: matched by CKAN's file
