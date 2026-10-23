@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.3.0
+
+The mod manager from the 0.3.0 betas is now on the stable channel, plus pack updates that need no clicks.
+
+- **Mod manager.** Browse the whole CKAN catalog (about 3,800 mods) with pictures and descriptions, make extra KSP
+  setups or manage a KSP folder you already have, install, remove and update any mod with a review before anything
+  changes, and share a setup as a code or a `.vmpack` file. The pack's own copy stays exactly as the host published
+  it. Details in the beta notes below.
+- **New packs install by themselves.** The launcher checks for a new pack before Play, when KSP closes and when you
+  come back to its window (at most every 10 minutes; a check is three small files), and installs it when KSP isn't
+  running. Before, a launcher left open installed only the first new pack by itself and then waited for a click.
+- **Updates repair themselves.** KSP redraws some part icons inside mod folders, which made the next update stop with
+  "Installed files do not match the pack". An update that finds files changed since the install now puts them back
+  from the downloads it already has and tries again.
+- Right after the host publishes, GitHub can serve the new pack files with an old signature for a few minutes. The
+  launcher now keeps the pack it has and checks again later, instead of showing a signature error.
+- An unchanged pack is no longer downloaded again on every check.
+- Host tools: publishing waits up to two minutes for GitHub to serve a newly uploaded mod file (it gave up after 27
+  seconds). Part icons (`@thumbs` folders) are treated as files KSP may rewrite.
+
 ## 0.3.0-beta.3
 
 - When SpaceDock (the site mod pictures and long descriptions come from) is down, the Mods page says so instead of
