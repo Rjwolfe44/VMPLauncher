@@ -123,6 +123,8 @@ public sealed record FileRules
         MutableOwned = new[]
         {
             "GameData/**/PluginData/**",
+            // Part icons: KSP renders its own into @thumbs (e.g. for parts shown in stock inventories) and overwrites the mod's.
+            "GameData/**/@thumbs/**",
             // Known mods that rewrite their own settings files at runtime (found by capturing the host install).
             "GameData/KerbalEngineer/Settings/**",
             "GameData/AtmosphereAutopilot/Global_settings.txt",

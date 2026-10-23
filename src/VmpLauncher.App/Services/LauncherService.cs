@@ -119,7 +119,20 @@ public sealed class LauncherService : IDisposable
 
     public string PasswordKey => $"server-password:{PackId}";
 
-    public async Task<ResolvedPack?> RefreshPackAsync(CancellationToken ct)
+    private Task<ResolvedPack?>? _refreshing;
+
+    /// <summary>Fetches the pack's current version; callers arriving while one runs share it (same cache files).</summary>
+    public Task<ResolvedPack?> RefreshPackAsync(CancellationToken ct)
+    {
+        if (_refreshing is { IsCompleted: false } running)
+        {
+            return running;
+        }
+        _refreshing = RefreshCoreAsync(ct);
+        return _refreshing;
+    }
+
+    private async Task<ResolvedPack?> RefreshCoreAsync(CancellationToken ct)
     {
         CurrentPack = await _catalog.ResolveAsync(PackId, ct).ConfigureAwait(false);
         RaiseStateChanged();
@@ -178,6 +191,22 @@ public sealed class LauncherService : IDisposable
     public PrivateModsService PrivateMods => _private;
 
     public async Task<ProfileOperations.Report> InstallOrUpdateAsync(CancellationToken outer)
+    {
+        try
+        {
+            return await InstallOrUpdateCoreAsync(outer).ConfigureAwait(false);
+        }
+        catch (LauncherException ex) when (ex.Code == ErrorCode.VerifyFailed && GetStatus().State is ProfileState.UpdateAvailable or ProfileState.Modified)
+        {
+            // The update rolled back because files changed since the last install (KSP redraws some part icons, a player
+            // edits a config). Put them back from the cached downloads, as Repair does, and try once more.
+            _log.LogWarning("Update failed its final check ({Details}); repairing and retrying once", string.Join("; ", ex.Details));
+            await RepairAsync(false, outer).ConfigureAwait(false);
+            return await InstallOrUpdateCoreAsync(outer).ConfigureAwait(false);
+        }
+    }
+
+    private async Task<ProfileOperations.Report> InstallOrUpdateCoreAsync(CancellationToken outer)
     {
         var pack = CurrentPack ?? throw new LauncherException(ErrorCode.InvalidPack, "No pack is loaded.");
         var status = GetStatus();

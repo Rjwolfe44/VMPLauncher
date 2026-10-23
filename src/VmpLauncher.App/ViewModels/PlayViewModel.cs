@@ -49,9 +49,12 @@ public partial class PlayViewModel : ObservableObject
     private readonly IAppNavigator _navigation;
     private readonly ILogger<PlayViewModel> _log;
 
-    public PlayViewModel(LauncherService launcher, AppSettingsStore settings, ISecretStore secrets, ServerStatusService server, IAppNavigator navigation, ILogger<PlayViewModel> log)
+    private readonly PackUpdateService _packUpdates;
+
+    public PlayViewModel(LauncherService launcher, AppSettingsStore settings, ISecretStore secrets, ServerStatusService server, IAppNavigator navigation, PackUpdateService packUpdates, ILogger<PlayViewModel> log)
     {
         _launcher = launcher;
+        _packUpdates = packUpdates;
         _settings = settings;
         _secrets = secrets;
         Server = server;
@@ -218,9 +221,26 @@ public partial class PlayViewModel : ObservableObject
     private async Task RunGameAsync(Func<string?> joinEntry, CancellationToken ct)
     {
         Error = null;
+        var joining = false;
         try
         {
             var join = joinEntry();
+            joining = join is not null;
+            // A pack published since the last check would fail the server's mod check: install it first.
+            var hint = PlayHint;
+            PlayHint = "Checking for a newer pack…";
+            var check = await _packUpdates.CheckAsync(TimeSpan.FromMinutes(2), apply: true, ct).ConfigureAwait(true);
+            PlayHint = hint;
+            if (check.Outcome == PackCheckOutcome.UpdateNotApplied && joining)
+            {
+                Error = new UserFacingError("A newer pack is out", check.Message, "Update it on Home, then press Play.", string.Empty, Core.Diagnostics.RecoveryHint.None);
+                return;
+            }
+            if (check.Outcome == PackCheckOutcome.Failed && joining)
+            {
+                Error = check.Error ?? new UserFacingError("The pack update failed", check.Message, "Try again from Home.", string.Empty, Core.Diagnostics.RecoveryHint.Retry);
+                return;
+            }
             var entries = Routes.Select(r => new VmpSettingsFile.ServerEntry(r.EntryName, r.Host, r.Port, null)).ToList();
             using var process = _launcher.Launch(join, entries);
             GameRunning = true;
@@ -242,11 +262,17 @@ public partial class PlayViewModel : ObservableObject
         }
         finally
         {
+            var wasRunning = GameRunning;
             GameRunning = false;
             UpdatePreflight();
             if (System.Windows.Application.Current.MainWindow is { WindowState: System.Windows.WindowState.Minimized } w)
             {
                 w.WindowState = System.Windows.WindowState.Normal;
+            }
+            if (wasRunning)
+            {
+                // Kicked by a server restart for a new pack? Closing KSP is enough: the update installs now.
+                _ = _packUpdates.CheckAsync(TimeSpan.Zero, apply: true, CancellationToken.None);
             }
         }
     }

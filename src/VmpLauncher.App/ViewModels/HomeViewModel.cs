@@ -34,7 +34,7 @@ public partial class HomeViewModel : ObservableObject
     private readonly DispatcherTimer _timer;
     private DateTimeOffset _lastRefresh = DateTimeOffset.MinValue;
     private OperationKind? _lastKind;
-    private bool _autoUpdateTried;
+    private string? _autoUpdateTriedFor;
     private ProfileState _state;
 
     public HomeViewModel(LauncherService launcher, AppSettingsStore settings, IAppNavigator navigation, OperationRunner runner, ServerStatusService server, ILogger<HomeViewModel> log)
@@ -174,18 +174,21 @@ public partial class HomeViewModel : ObservableObject
         UpdateState();
     }
 
-    /// <summary>Pack updates apply by themselves on launch when nothing needs the user (no KSP running, no missing private file).</summary>
+    /// <summary>
+    /// Pack updates apply by themselves when nothing needs the user (no KSP running, no missing private file). Once per
+    /// pack version: a version published while the launcher is open installs too, and a failed one is not retried in a loop.
+    /// </summary>
     private async Task MaybeAutoUpdateAsync()
     {
-        if (_autoUpdateTried || !_settings.Current.AutoUpdatePack || _state != ProfileState.UpdateAvailable || PrivateBlocking || _runner.IsBusy)
+        if (_autoUpdateTriedFor == PackVersion || !_settings.Current.AutoUpdatePack || _state != ProfileState.UpdateAvailable || PrivateBlocking || _runner.IsBusy)
         {
             return;
         }
-        _autoUpdateTried = true;
         if (OperatingSystem.IsWindows() && Core.Profiles.GameProcessGuard.FindRunning(_launcher.ProfilePaths.GameDir).Count > 0)
         {
             return;
         }
+        _autoUpdateTriedFor = PackVersion;
         _log.LogInformation("Auto-updating the pack to {Version}", PackVersion);
         await PrimaryAsync(CancellationToken.None);
     }

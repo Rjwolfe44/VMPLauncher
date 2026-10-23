@@ -364,13 +364,15 @@ public sealed class Publisher
                 {
                     var view = tools.Run("gh", new[] { "release", "view", tag, "--repo", repo }, throwOnError: false);
                     tools.Run("gh", view.Ok ? uploadArgs : createArgs);
-                    // Re-download and compare: the lock promises this exact hash.
+                    // Re-download and compare: the lock promises this exact hash. A new release's download URL can
+                    // answer 404 for more than half a minute after the upload, so keep trying for about two minutes.
                     var tmp = Path.Combine(Path.GetTempPath(), "vmpl-asset-" + Guid.NewGuid().ToString("N") + ".zip");
                     try
                     {
-                        for (var attempt = 0; attempt < 6; attempt++)
+                        const int attempts = 13;
+                        for (var attempt = 0; attempt < attempts; attempt++)
                         {
-                            Thread.Sleep(attempt == 0 ? 2000 : 5000);
+                            Thread.Sleep(attempt == 0 ? 2000 : 10000);
                             try
                             {
                                 using var s = _http.GetStreamAsync(url, ct).GetAwaiter().GetResult();
@@ -378,7 +380,7 @@ public sealed class Publisher
                                 s.CopyTo(f);
                                 break;
                             }
-                            catch (Exception ex) when (attempt < 5 && (ex is HttpRequestException || (ex is TaskCanceledException && !ct.IsCancellationRequested))) { }
+                            catch (Exception ex) when (attempt < attempts - 1 && (ex is HttpRequestException || (ex is TaskCanceledException && !ct.IsCancellationRequested))) { }
                         }
                         if (!File.Exists(tmp) || !Sha256Util.HexEquals(Sha256Util.HashFile(tmp), module.Artifact.Sha256))
                         {

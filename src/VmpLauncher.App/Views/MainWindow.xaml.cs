@@ -30,8 +30,19 @@ public partial class MainWindow : FluentWindow
         HostToolsService host,
         HomeViewModel home,
         IActivationService activation,
+        PackUpdateService packUpdates,
         ILogger<MainWindow> log)
     {
+        // The first activation is the start-up itself (Home checks then); later ones mean the player came back.
+        var cameBack = false;
+        Activated += (_, _) =>
+        {
+            if (cameBack && settings.Current.WelcomeCompleted)
+            {
+                _ = packUpdates.CheckAsync(TimeSpan.FromMinutes(10), apply: true, CancellationToken.None);
+            }
+            cameBack = true;
+        };
         _settings = settings;
         _log = log;
         _navigator = navigator;

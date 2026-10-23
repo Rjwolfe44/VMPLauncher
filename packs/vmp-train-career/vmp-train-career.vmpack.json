@@ -60,7 +60,7 @@
       "GameData/KerbalKonstructs/PluginDataWindowPositions.cfg", "GameData/KSP-AVC/Plugins/KSP-AVC.xml"
     ],
     "perPlayer": [ "GameData/VladMultiplayer/Data/**", "GameData/VladMultiplayer/Traces/**", "GameData/VladMultiplayer/logs/**", "GameData/ApexGuidance/Plugins/PluginData/**" ],
-    "mutableOwned": [ "GameData/**/PluginData/**", "GameData/KerbalEngineer/Settings/**", "GameData/AtmosphereAutopilot/Global_settings.txt", "GameData/RocketSoundEnhancement/Settings.cfg" ],
+    "mutableOwned": [ "GameData/**/PluginData/**", "GameData/**/@thumbs/**", "GameData/KerbalEngineer/Settings/**", "GameData/AtmosphereAutopilot/Global_settings.txt", "GameData/RocketSoundEnhancement/Settings.cfg" ],
     "stock": [ "GameData/Squad/**", "GameData/SquadExpansion/**" ]
   },
   "multiplayer": {

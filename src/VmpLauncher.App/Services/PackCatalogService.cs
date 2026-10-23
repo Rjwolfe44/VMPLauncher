@@ -63,6 +63,13 @@ public sealed class PackCatalogService
             var cachedDir = Path.Combine(PackCacheDir, packId);
             return Directory.Exists(cachedDir) ? ResolveLocal(cachedDir, "cached copy (offline)") : null;
         }
+        catch (LauncherException ex) when (ex.Code == ErrorCode.Tampered && !ct.IsCancellationRequested && Directory.Exists(Path.Combine(PackCacheDir, packId)))
+        {
+            // Right after a publish GitHub's file cache can serve the new channel.json with the old signature for up to
+            // five minutes. Keep the pack already verified and installed (nothing unverified is used); the next check retries.
+            _log.LogWarning(ex, "New pack files did not verify; keeping the cached copy");
+            return ResolveLocal(Path.Combine(PackCacheDir, packId), "cached copy (the newest pack files did not verify yet; GitHub can take up to 5 minutes after a publish)");
+        }
     }
 
     public ResolvedPack ResolveLocal(string dir, string source)
@@ -100,6 +107,11 @@ public sealed class PackCatalogService
         Directory.CreateDirectory(dir);
         var lockUri = new Uri(packBase, stable.Lock);
         var lockPath = Path.Combine(dir, $"{packId}.vmpack.lock.json");
+        // Unchanged pack: the three small files above are the whole check (about 1.7 MB less per check).
+        if (TryReuseCached(lockPath, stable.Sha256, catalogUrl) is { } unchanged)
+        {
+            return unchanged;
+        }
         var lockBytes = await GetBytesAsync(lockUri, ct).ConfigureAwait(false);
         if (!Sha256Util.HexEquals(Sha256Util.HashBytes(lockBytes), stable.Sha256))
         {
@@ -140,6 +152,34 @@ public sealed class PackCatalogService
             throw new LauncherException(ErrorCode.Tampered, "The pack lock failed signature verification.", RecoveryHint.AskHost, details: new[] { reason ?? "" });
         }
         return new ResolvedPack(lockDoc, lockPath, invPath, Sha256Util.HashBytes(lockBytes), trust, reason, catalogUrl);
+    }
+
+    /// <summary>
+    /// The cached lock and inventory when the channel still points at them: same lock hash, inventory present and
+    /// matching, signature trusted. Anything less (missing, damaged, unsigned) means a normal download.
+    /// </summary>
+    private ResolvedPack? TryReuseCached(string lockPath, string expectedSha256, string source)
+    {
+        try
+        {
+            if (!File.Exists(lockPath) || !Sha256Util.HexEquals(Sha256Util.HashFile(lockPath), expectedSha256))
+            {
+                return null;
+            }
+            var lockDoc = LauncherJson.ReadFile<PackLock>(lockPath);
+            var invPath = Path.Combine(Path.GetDirectoryName(lockPath)!, lockDoc.Inventory.File);
+            if (!File.Exists(invPath))
+            {
+                return null;
+            }
+            _ = InventoryFile.Read(invPath, lockDoc.Inventory.Sha256);
+            var trust = _verifier.VerifyFile(lockPath, out _, out var reason);
+            return trust == TrustLevel.VerifiedPublisher ? new ResolvedPack(lockDoc, lockPath, invPath, expectedSha256.ToLowerInvariant(), trust, reason, source) : null;
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or JsonException or LauncherException or UnauthorizedAccessException)
+        {
+            return null;
+        }
     }
 
     private static async Task<string> GetStringAsync(Uri uri, CancellationToken ct)
