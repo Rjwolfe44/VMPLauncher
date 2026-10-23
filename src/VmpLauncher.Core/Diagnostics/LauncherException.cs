@@ -40,6 +40,8 @@ public enum RecoveryHint
     ProvideFile,
     Repair,
     Restore,
+    /// <summary>Repair and Restore cannot fix it: rebuild the pack copy, keeping the player's own files.</summary>
+    Reinstall,
 }
 
 /// <summary>Launcher-level error with a user-facing message, a code the UI maps to copy, and a recovery hint.</summary>

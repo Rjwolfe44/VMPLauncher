@@ -244,6 +244,7 @@ public sealed partial class CatalogService
         }
         using var profileLock = target.ProfileRoot is { } root ? ProfileLock.Acquire(new ProfilePaths(root), "mods") : null;
         RegistryManager manager;
+        Backend.CkanLockFile.ClearStale(target.GameDir);
         try
         {
             manager = RegistryManager.Instance(instance, _repoData, new[] { DefaultRepo });

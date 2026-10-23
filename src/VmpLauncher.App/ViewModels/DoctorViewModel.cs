@@ -29,11 +29,21 @@ public partial class DoctorViewModel : ObservableObject
     private readonly IAppNavigator _navigation;
     private readonly LauncherPaths _paths;
     private readonly ILogger<DoctorViewModel> _log;
+    private readonly RecoveryActions _recovery;
     private ConnectionDoctor? _lastDoctor;
     private static readonly System.Net.Http.HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(8) };
 
-    public DoctorViewModel(LauncherService launcher, ISecretStore secrets, IAppNavigator navigation, LauncherPaths paths, ILogger<DoctorViewModel> log)
+    public DoctorViewModel(LauncherService launcher, ISecretStore secrets, IAppNavigator navigation, LauncherPaths paths, RecoveryActions recovery, ILogger<DoctorViewModel> log)
     {
+        _recovery = recovery;
+        recovery.Completed += r => System.Windows.Application.Current?.Dispatcher.BeginInvoke(async () =>
+        {
+            PackError = r.Error;
+            LastFix = r.Error is null ? r.Message : null;
+            await CheckPackAsync();
+        });
+        launcher.Runner.Finished += _ => System.Windows.Application.Current?.Dispatcher.BeginInvoke(UpdatePackStatus);
+        launcher.StateChanged += UpdatePackStatus;
         _launcher = launcher;
         _secrets = secrets;
         _navigation = navigation;
@@ -48,6 +58,69 @@ public partial class DoctorViewModel : ObservableObject
     [ObservableProperty] private string _headlineKind = "neutral";
     [ObservableProperty] private bool _hasReport;
     [ObservableProperty] private UserFacingError? _error;
+
+    // Fix the pack copy
+    [ObservableProperty] private string _packStatus = "Looking at the pack copy…";
+    [ObservableProperty] private string _packStatusKind = "checking";
+    [ObservableProperty] private bool _canRepair;
+    [ObservableProperty] private bool _canRestore;
+    [ObservableProperty] private bool _canReinstall;
+    [ObservableProperty] private string? _lastFix;
+    [ObservableProperty] private UserFacingError? _packError;
+
+    /// <summary>Quick file check (seconds), then the status: an operation that just ran clears the last check.</summary>
+    public async Task CheckPackAsync()
+    {
+        UpdatePackStatus();
+        if (_launcher.GetStatus().State == ProfileState.Installed)
+        {
+            await _launcher.RefreshIntegrityAsync(CancellationToken.None);
+            UpdatePackStatus();
+        }
+    }
+
+    /// <summary>Plain-language state of the pack copy and which fixes apply; also refreshed after every operation.</summary>
+    public void UpdatePackStatus()
+    {
+        var st = _launcher.GetStatus();
+        (PackStatus, PackStatusKind) = st.State switch
+        {
+            ProfileState.NoKsp => ("Choose your KSP folder first (Home).", "warn"),
+            ProfileState.NotInstalled => ("The pack is not installed yet. Install it from Home, or Reinstall here to start over.", "neutral"),
+            ProfileState.Interrupted => ($"{st.Detail} Restore finishes or undoes it.", "error"),
+            ProfileState.Modified => ($"{st.ModifiedFiles} files differ from the pack. Repair puts them back.", "warn"),
+            ProfileState.UpdateAvailable => ($"Pack {st.Installed?.PackVersion} is installed and {st.Pack?.Lock.Pack.Version} is waiting. If updating keeps failing: Repair, then Reinstall.", "warn"),
+            _ => ($"Pack {st.Installed?.PackVersion} is installed. If KSP or joining acts up, Repair checks every file.", "ok"),
+        };
+        var busy = _launcher.Runner.IsBusy;
+        CanRepair = !busy && st.State is ProfileState.Installed or ProfileState.UpdateAvailable or ProfileState.Modified;
+        CanRestore = !busy && st.State == ProfileState.Interrupted;
+        CanReinstall = !busy && st.State != ProfileState.NoKsp && _launcher.CurrentPack is not null;
+    }
+
+    private async Task FixAsync(Func<Task> fix)
+    {
+        PackError = null;
+        LastFix = null;
+        CanRepair = CanRestore = CanReinstall = false;
+        await fix();
+        UpdatePackStatus(); // also when the reinstall was not confirmed
+    }
+
+    [RelayCommand]
+    private Task RepairPackAsync() => FixAsync(_recovery.RepairAsync);
+
+    [RelayCommand]
+    private Task RestorePackAsync() => FixAsync(_recovery.RestoreAsync);
+
+    [RelayCommand]
+    private Task ReinstallPackAsync() => FixAsync(_recovery.ReinstallAsync);
+
+    [RelayCommand]
+    private void CopyPackReport() => _recovery.CopyReportCommand.Execute(PackError);
+
+    [RelayCommand]
+    private void OpenLogs() => _recovery.OpenLogsCommand.Execute(null);
 
     [RelayCommand]
     private async Task RunAsync(CancellationToken ct)

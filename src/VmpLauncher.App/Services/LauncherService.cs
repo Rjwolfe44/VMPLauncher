@@ -204,7 +204,15 @@ public sealed class LauncherService : IDisposable
             _log.LogWarning("Update failed its final check ({Details}); repairing and retrying once", string.Join("; ", ex.Details));
             var strayDlls = ex.Details.Any(d => d.StartsWith("unknown dll ", StringComparison.Ordinal));
             await RepairAsync(strayDlls, outer).ConfigureAwait(false);
-            return await InstallOrUpdateCoreAsync(outer).ConfigureAwait(false);
+            try
+            {
+                return await InstallOrUpdateCoreAsync(outer).ConfigureAwait(false);
+            }
+            catch (LauncherException again) when (again.Code == ErrorCode.VerifyFailed)
+            {
+                // Repair could not make the copy match the pack: the way out is the reinstall that keeps the player's files.
+                throw new LauncherException(ErrorCode.VerifyFailed, "The pack copy still does not match the pack after a repair.", RecoveryHint.Reinstall, again, again.Details);
+            }
         }
     }
 
@@ -218,23 +226,91 @@ public sealed class LauncherService : IDisposable
             return await _runner.RunAsync(isUpdate ? OperationKind.Update : OperationKind.Install, isUpdate ? $"Updating to {pack.Lock.Pack.Version}" : $"Installing {pack.Lock.Pack.Name}", async (progress, ct) =>
             {
                 using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, outer);
-                var token = linked.Token;
-                // Private packages first: nothing in the profile changes until every file is verified locally.
-                var sideloads = await _private.PrepareAsync(pack.Lock, isUpdate ? InstalledLock() : null, progress, token).ConfigureAwait(false);
-                await ImportFromCkanCachesAsync(pack.Lock, progress, token).ConfigureAwait(false);
-                return await _worker.RunAsync(() =>
-                {
-                    var profile = EnsureProfileSeeded(pack, progress);
-                    var ops = new ProfileOperations(_paths, new ProgressWriter(progress), progress);
-                    var request = new ProfileOperations.Request(profile, new ProfileOperations.LockSource(pack.LockPath, pack.InventoryPath), CacheDir, Offline: false, sideloads);
-                    return isUpdate ? ops.Update(request, token) : ops.Install(request, token);
-                }, token).ConfigureAwait(false);
+                return await InstallWorkAsync(pack, isUpdate, progress, linked.Token).ConfigureAwait(false);
             }).ConfigureAwait(false);
         }
         finally
         {
             _lastVerify = null;
             RaiseStateChanged();
+        }
+    }
+
+    private async Task<ProfileOperations.Report> InstallWorkAsync(ResolvedPack pack, bool isUpdate, IProgress<VmpLauncher.Ckan.Users.CkanProgress> progress, CancellationToken token,
+        IReadOnlyDictionary<string, string>? prepared = null)
+    {
+        // Private packages first: nothing in the profile changes until every file is verified locally.
+        var sideloads = prepared ?? await PrepareDownloadsAsync(pack, isUpdate, progress, token).ConfigureAwait(false);
+        return await _worker.RunAsync(() =>
+        {
+            var profile = EnsureProfileSeeded(pack, progress);
+            var ops = new ProfileOperations(_paths, new ProgressWriter(progress), progress);
+            var request = new ProfileOperations.Request(profile, new ProfileOperations.LockSource(pack.LockPath, pack.InventoryPath), CacheDir, Offline: false, sideloads);
+            return isUpdate ? ops.Update(request, token) : ops.Install(request, token);
+        }, token).ConfigureAwait(false);
+    }
+
+    private async Task<IReadOnlyDictionary<string, string>> PrepareDownloadsAsync(ResolvedPack pack, bool isUpdate, IProgress<VmpLauncher.Ckan.Users.CkanProgress> progress, CancellationToken token)
+    {
+        var sideloads = await _private.PrepareAsync(pack.Lock, isUpdate ? InstalledLock() : null, progress, token).ConfigureAwait(false);
+        await ImportFromCkanCachesAsync(pack.Lock, progress, token).ConfigureAwait(false);
+        return sideloads;
+    }
+
+    /// <summary>
+    /// The last resort when Repair and Restore cannot fix the pack copy: sets the copy aside, builds a fresh one from the
+    /// pack (downloads come from the cache) and moves the player's own files into it (<see cref="PlayerFiles"/>). If
+    /// anything fails or is cancelled the old copy comes back as it was; it is deleted only once the new one is installed.
+    /// </summary>
+    public async Task<ProfileOperations.Report> ReinstallAsync(CancellationToken outer)
+    {
+        var pack = CurrentPack ?? throw new LauncherException(ErrorCode.InvalidPack, "The pack is not loaded. Check your connection, then refresh Home.", RecoveryHint.Retry);
+        var profile = ProfilePaths;
+        if (profile.Exists && profile.ReadManifest().GameDir is not null)
+        {
+            throw new LauncherException(ErrorCode.ProfilePathInvalid, "Only the launcher's own copy of the pack can be reinstalled.");
+        }
+        CleanUpOldCopies();
+        try
+        {
+            return await _runner.RunAsync(OperationKind.Reinstall, $"Reinstalling {pack.Lock.Pack.Name}", async (progress, ct) =>
+            {
+                using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, outer);
+                var token = linked.Token;
+                if (OperatingSystem.IsWindows())
+                {
+                    GameProcessGuard.ThrowIfRunning(profile.GameDir);
+                }
+                // Private packages before anything moves: a missing invite then fails with the copy untouched.
+                var prepared = await PrepareDownloadsAsync(pack, isUpdate: false, progress, token).ConfigureAwait(false);
+                var log = new ProgressWriter(progress);
+                var outcome = await ProfileReinstaller.RunAsync(profile.Root, pack.Lock.FileRules, () => InstallWorkAsync(pack, isUpdate: false, progress, token, prepared), log).ConfigureAwait(false);
+                _log.LogInformation("Reinstalled {Version}: kept {Folders} folders and {Files} settings files{LeftOver}", pack.Lock.Pack.Version,
+                    outcome.Kept?.Folders ?? 0, outcome.Kept?.Files ?? 0, outcome.LeftOver is null ? string.Empty : $"; {outcome.LeftOver} is removed later");
+                return outcome.Built;
+            }).ConfigureAwait(false);
+        }
+        finally
+        {
+            _lastVerify = null;
+            RaiseStateChanged();
+        }
+    }
+
+    /// <summary>Removes old copies a reinstall set aside but could not delete (a file was in use). Best effort.</summary>
+    public void CleanUpOldCopies()
+    {
+        try
+        {
+            var removed = ProfileReinstaller.CleanUpOldCopies(ProfilePaths);
+            if (removed > 0)
+            {
+                _log.LogInformation("Removed {Count} old pack copies left by a reinstall", removed);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or LauncherException)
+        {
+            _log.LogWarning(ex, "Old pack copy cleanup skipped");
         }
     }
 

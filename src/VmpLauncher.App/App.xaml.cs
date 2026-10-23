@@ -32,7 +32,11 @@ public partial class App : Application
         ApplyBrandAccent();
         Services.GetRequiredService<AccessibilityService>().Start();
         Services.GetRequiredService<UpdateService>().Start();
+        // Created now so every error card can bind to it (RecoveryActions.Instance).
+        Services.GetRequiredService<RecoveryActions>();
         _ = Services.GetRequiredService<ModManagerService>().WarmUpAsync();
+        var launcher = Services.GetRequiredService<LauncherService>();
+        _ = Task.Run(launcher.CleanUpOldCopies);
     }
 
     protected override void OnExit(ExitEventArgs e)

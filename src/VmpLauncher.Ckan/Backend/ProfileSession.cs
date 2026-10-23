@@ -49,7 +49,15 @@ public sealed class ProfileSession : IDisposable
             PackRepo = new Repository($"vmpack-{lockDoc.Pack.Id}", new Uri(repoZip));
             _repoData = new RepositoryDataManager(paths.CkanReposDir);
 
-            RegistryManager = RegistryManager.Instance(Instance, _repoData, new[] { PackRepo });
+            CkanLockFile.ClearStale(profile.GameDir);
+            try
+            {
+                RegistryManager = RegistryManager.Instance(Instance, _repoData, new[] { PackRepo });
+            }
+            catch (RegistryInUseKraken ex)
+            {
+                throw new LauncherException(ErrorCode.CkanBusy, "CKAN has the pack's KSP folder open.", RecoveryHint.None, ex);
+            }
             RegistryManager.registry.RepositoriesSet(new SortedDictionary<string, Repository> { [PackRepo.name] = PackRepo });
             var downloader = new NetAsyncDownloader(user, () => SHA256.Create(), UserAgent);
             var result = _repoData.Update(new[] { PackRepo }, Game, skipETags: true, downloader, user, UserAgent);

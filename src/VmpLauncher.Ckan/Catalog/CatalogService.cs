@@ -199,6 +199,7 @@ public sealed partial class CatalogService : IDisposable
         }
         var instance = TryInstance(target)
                        ?? throw new LauncherException(ErrorCode.GameNotFound, $"{target.GameDir} is not a KSP folder the launcher can read.", RecoveryHint.ChooseAnotherFolder);
+        Backend.CkanLockFile.ClearStale(instance.GameDir); // a crash's leftover would make the folder read-only for good
         var locked = instance.IsMaybeLocked;
         // A folder CKAN holds open before it ever saved a registry has no mod list yet: browse it as empty.
         var registry = RegistryManager.ReadOnlyRegistry(instance, _repoData)
@@ -224,6 +225,7 @@ public sealed partial class CatalogService : IDisposable
     private Registry CreateRegistry(GameInstance instance)
     {
         // A fresh copy has no CKAN registry yet: create one (scanning the DLLs already there) and release the lock.
+        Backend.CkanLockFile.ClearStale(instance.GameDir);
         try
         {
             var mgr = RegistryManager.Instance(instance, _repoData, new[] { DefaultRepo });

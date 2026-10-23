@@ -31,14 +31,17 @@ public partial class HomeViewModel : ObservableObject
     private readonly OperationRunner _runner;
     private readonly ServerStatusService _server;
     private readonly ILogger<HomeViewModel> _log;
+    private readonly RecoveryActions _recovery;
     private readonly DispatcherTimer _timer;
     private DateTimeOffset _lastRefresh = DateTimeOffset.MinValue;
     private OperationKind? _lastKind;
     private string? _autoUpdateTriedFor;
     private ProfileState _state;
 
-    public HomeViewModel(LauncherService launcher, AppSettingsStore settings, IAppNavigator navigation, OperationRunner runner, ServerStatusService server, ILogger<HomeViewModel> log)
+    public HomeViewModel(LauncherService launcher, AppSettingsStore settings, IAppNavigator navigation, OperationRunner runner, ServerStatusService server, RecoveryActions recovery, ILogger<HomeViewModel> log)
     {
+        _recovery = recovery;
+        recovery.Completed += r => System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => OnRecovered(r));
         _launcher = launcher;
         _settings = settings;
         _navigation = navigation;
@@ -254,10 +257,36 @@ public partial class HomeViewModel : ObservableObject
         Requirements.Add(new RequirementRow { Label = "Disk space", Ok = free > needed, Detail = $"{Format.Bytes(free)} free on {Path.GetPathRoot(Path.GetFullPath(profileRoot))}" });
     }
 
+    /// <summary>A fix from an error card or Troubleshoot finished: clear the error it fixed and look again (a pending
+    /// update then installs by itself, since the fix may be what it was waiting for).</summary>
+    private void OnRecovered(RecoveryResult r)
+    {
+        if (r.Error is not null)
+        {
+            Error = r.Error;
+            return;
+        }
+        Error = null;
+        _autoUpdateTriedFor = null;
+        _ = RefreshCommand.ExecuteAsync(null);
+    }
+
+    /// <summary>Repair is always one click away while a pack is installed (it checks every file, so it also helps
+    /// when nothing looks wrong yet).</summary>
+    [ObservableProperty] private bool _canRepair;
+
+    [RelayCommand]
+    private Task RepairFilesAsync()
+    {
+        Error = null;
+        return _recovery.RepairAsync();
+    }
+
     private void UpdateState()
     {
         var status = _launcher.GetStatus();
         _state = status.State;
+        CanRepair = status.State is ProfileState.Installed or ProfileState.UpdateAvailable or ProfileState.Modified && !_runner.IsBusy;
         var blocked = PrivateBlocking && status.State is ProfileState.NotInstalled or ProfileState.UpdateAvailable;
         (StateBadge, StateKind, StateHeadline, PrimaryAction, PrimaryIcon, PrimaryEnabled) = status.State switch
         {

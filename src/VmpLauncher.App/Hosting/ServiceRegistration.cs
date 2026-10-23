@@ -30,6 +30,7 @@ public static class ServiceRegistration
         services.AddSingleton<VmpLauncher.Ckan.Backend.CkanWorker>();
         services.AddSingleton<LauncherService>();
         services.AddSingleton<PackUpdateService>();
+        services.AddSingleton<RecoveryActions>();
         services.AddSingleton<SetupService>();
         services.AddSingleton<ModManagerService>();
         services.AddSingleton<ModInfoService>();

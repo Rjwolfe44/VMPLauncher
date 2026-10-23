@@ -124,19 +124,28 @@ public sealed class CatalogChangesTests : IDisposable
     {
         var lockFile = Path.Combine(_w.Profile.GameDir, "CKAN", "registry.locked");
         Directory.CreateDirectory(Path.GetDirectoryName(lockFile)!);
-        // CKAN writes its PID; a live process (this one) means "in use".
-        File.WriteAllText(lockFile, Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture));
-        try
+        // Like CKAN: the file holds its PID and stays open, unshared, for as long as CKAN runs.
+        using (var held = new FileStream(lockFile, FileMode.Create, FileAccess.Write, FileShare.None, 512, FileOptions.DeleteOnClose))
         {
+            held.Write(System.Text.Encoding.ASCII.GetBytes(Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+            held.Flush();
             Assert.True(Run(s => s.Build(_target)).ReadOnly);
             var ex = Assert.Throws<LauncherException>(() => Apply(new ChangeRequest { Install = new[] { "F" } }));
             Assert.Equal(ErrorCode.CkanBusy, ex.Code);
             Assert.False(File.Exists(_w.GamePath("GameData/F/F.cfg")));
         }
-        finally
-        {
-            File.Delete(lockFile);
-        }
+    }
+
+    [Fact]
+    public void A_lock_left_behind_by_a_crash_does_not_block_the_folder()
+    {
+        var lockFile = Path.Combine(_w.Profile.GameDir, "CKAN", "registry.locked");
+        Directory.CreateDirectory(Path.GetDirectoryName(lockFile)!);
+        File.WriteAllText(lockFile, "4242"); // power cut: the file stayed, nobody holds it
+        Assert.False(Run(s => s.Build(_target)).ReadOnly);
+        Assert.False(File.Exists(lockFile));
+        Apply(new ChangeRequest { Install = new[] { "F" } });
+        Assert.True(File.Exists(_w.GamePath("GameData/F/F.cfg")));
     }
 
     [Fact]

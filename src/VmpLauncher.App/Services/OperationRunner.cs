@@ -19,6 +19,8 @@ public enum OperationKind
     Mods,
     /// <summary>Making or removing a setup (a KSP copy).</summary>
     Setup,
+    /// <summary>Rebuilding the pack copy from scratch, keeping the player's own files.</summary>
+    Reinstall,
 }
 
 /// <summary>Latest known state of the running operation; sampled by the UI at 10 Hz, never pushed per event.</summary>

@@ -10,7 +10,40 @@
     d:DataContext="{d:DesignInstance vm:DoctorViewModel}">
     <ScrollViewer Style="{StaticResource Space.PageScroll}">
         <StackPanel Margin="{StaticResource Space.Page.Padding}" MaxWidth="1000">
-            <DockPanel>
+            <TextBlock Style="{StaticResource Space.PageTitle}" Text="Doctor" />
+            <TextBlock Style="{StaticResource Space.Style.Secondary}" Text="Fixes for the pack copy, and why you can't join." />
+
+            <!-- Fix the pack copy: every way out of a stuck install, always reachable -->
+            <Border Style="{StaticResource Space.Card}" Padding="20,18" Margin="0,20,0,0">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource Space.SectionTitle}" Text="Fix the pack copy" />
+                    <StackPanel Orientation="Horizontal">
+                        <Ellipse Width="9" Height="9" Margin="0,0,8,0" VerticalAlignment="Center" Fill="{Binding PackStatusKind, Converter={StaticResource StatusKindToBrush}}" />
+                        <TextBlock Style="{StaticResource Space.Style.Body}" Text="{Binding PackStatus}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <TextBlock Style="{StaticResource Space.Style.Secondary}" Margin="0,10,0,0" Text="{Binding LastFix}" Foreground="{StaticResource Space.Status.OnlineBrush}"
+                               Visibility="{Binding LastFix, Converter={StaticResource NullToVisibility}}" />
+                    <WrapPanel Margin="0,14,0,0">
+                        <ui:Button Content="Check and repair files" Icon="{ui:SymbolIcon Wrench24}" Appearance="Primary" Margin="0,0,8,8"
+                                   Command="{Binding RepairPackCommand}" IsEnabled="{Binding CanRepair}"
+                                   ToolTip="Checks every pack file, puts back what changed or went missing, and moves DLLs the pack doesn't know to the quarantine folder" />
+                        <ui:Button Content="Restore" Icon="{ui:SymbolIcon History24}" Appearance="Primary" Margin="0,0,8,8"
+                                   Command="{Binding RestorePackCommand}" Visibility="{Binding CanRestore, Converter={StaticResource BoolToVisibility}}"
+                                   ToolTip="Finishes or undoes an install or update that was interrupted" />
+                        <ui:Button Content="Reinstall the pack copy…" Icon="{ui:SymbolIcon ArrowReset24}" Margin="0,0,8,8"
+                                   Command="{Binding ReinstallPackCommand}" IsEnabled="{Binding CanReinstall}"
+                                   ToolTip="Builds a fresh copy and keeps your saves, craft, screenshots and settings. Asks first." />
+                        <ui:Button Content="Copy report" Icon="{ui:SymbolIcon Copy24}" Margin="0,0,8,8" Command="{Binding CopyPackReportCommand}"
+                                   ToolTip="Copies versions, the pack state and the end of the log (passwords and your user name removed) to send to the host" />
+                        <ui:Button Content="Open logs" Icon="{ui:SymbolIcon FolderOpen24}" Margin="0,0,8,8" Command="{Binding OpenLogsCommand}" />
+                    </WrapPanel>
+                    <TextBlock Style="{StaticResource Space.Style.Caption}" TextWrapping="Wrap" Margin="0,2,0,0"
+                               Text="Try them in order: Repair fixes changed or missing files, Restore fixes an interrupted update, and Reinstall rebuilds everything else while keeping your own files. Your own KSP folder is never touched." />
+                    <ContentControl Content="{Binding PackError}" ContentTemplate="{StaticResource ErrorCardTemplate}" Visibility="{Binding PackError, Converter={StaticResource NullToVisibility}}" Focusable="False" />
+                </StackPanel>
+            </Border>
+
+            <DockPanel Margin="0,28,0,0">
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top">
                     <ui:Button Content="Copy report" Command="{Binding CopyReportCommand}" Icon="{ui:SymbolIcon Copy24}" Margin="0,0,8,0"
                                ToolTip="Copies a report with passwords and your user name removed, to send to the host"
@@ -18,7 +51,7 @@
                     <ui:Button Content="Run checks" Command="{Binding RunCommand}" Appearance="Primary" Icon="{ui:SymbolIcon Stethoscope24}" />
                 </StackPanel>
                 <StackPanel>
-                    <TextBlock Style="{StaticResource Space.PageTitle}" Text="Connection Doctor" />
+                    <TextBlock Style="{StaticResource Space.SectionTitle}" Text="Connection" Margin="0,0,0,4" />
                     <StackPanel Orientation="Horizontal">
                         <ui:ProgressRing IsIndeterminate="True" Width="16" Height="16" Margin="0,0,8,0" Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibility}}" />
                         <Ellipse Width="9" Height="9" Margin="0,0,8,0" VerticalAlignment="Center" Fill="{Binding HeadlineKind, Converter={StaticResource StatusKindToBrush}}"

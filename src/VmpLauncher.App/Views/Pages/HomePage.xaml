@@ -97,6 +97,8 @@
                             </Button>
                             <ui:Button Command="{Binding RefreshCommand}" Icon="{ui:SymbolIcon ArrowSync24}" Margin="14,0,0,0" Height="44" Width="44" Padding="0"
                                        ToolTip="Check for pack updates" AutomationProperties.Name="Check for pack updates" VerticalAlignment="Center" />
+                            <ui:Button Command="{Binding RepairFilesCommand}" IsEnabled="{Binding CanRepair}" Icon="{ui:SymbolIcon Wrench24}" Margin="8,0,0,0" Height="44" Width="44" Padding="0"
+                                       ToolTip="Check every file and repair what changed. More fixes: Doctor &gt; Fix the pack copy" AutomationProperties.Name="Check and repair files" VerticalAlignment="Center" />
                             <ui:Button Command="{Binding OpenProfileFolderCommand}" Icon="{ui:SymbolIcon FolderOpen24}" Margin="8,0,0,0" Height="44" Width="44" Padding="0"
                                        ToolTip="Open the modded game folder" AutomationProperties.Name="Open the modded game folder" VerticalAlignment="Center" />
                         </StackPanel>
