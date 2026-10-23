@@ -603,4 +603,43 @@ public sealed class SpaceDockClientTests : IDisposable
 
         Assert.Equal(expected, SpaceDockClient.IdFromUrl(uri));
     }
+    // --- availability ---
+
+    [Fact]
+    public async Task A_server_error_marks_SpaceDock_down_and_the_next_answer_brings_it_back()
+    {
+        var down = true;
+        var handler = new FakeHandler(_ => down ? Json("oops", HttpStatusCode.InternalServerError) : Json(Sample));
+        var client = NewClient(handler);
+        var changes = 0;
+        client.AvailabilityChanged += () => Interlocked.Increment(ref changes);
+
+        Assert.Null(client.UnavailableSinceUtc);
+        Assert.Null(await client.GetAsync(1, CancellationToken.None));
+        Assert.NotNull(client.UnavailableSinceUtc);
+        Assert.Null(await client.GetAsync(2, CancellationToken.None));
+        Assert.Equal(1, changes); // still down: no second event
+
+        down = false;
+        Assert.True(await client.ProbeAsync(CancellationToken.None));
+        Assert.Null(client.UnavailableSinceUtc);
+        Assert.Equal(2, changes);
+    }
+
+    [Fact]
+    public async Task A_404_is_an_answer_not_an_outage()
+    {
+        var client = NewClient(new FakeHandler(_ => Json("{}", HttpStatusCode.NotFound)));
+        Assert.Null(await client.GetAsync(7, CancellationToken.None));
+        Assert.Null(client.UnavailableSinceUtc);
+    }
+
+    [Fact]
+    public async Task No_network_marks_SpaceDock_down()
+    {
+        var client = NewClient(Offline());
+        Assert.Null(await client.GetAsync(3, CancellationToken.None));
+        Assert.NotNull(client.UnavailableSinceUtc);
+        Assert.False(await client.ProbeAsync(CancellationToken.None));
+    }
 }

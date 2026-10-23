@@ -32,17 +32,74 @@ public sealed class ModInfoService
     private readonly ConcurrentDictionary<int, Task<ModInfo?>> _infos = new();
     private readonly ConcurrentDictionary<string, Task<ImageSource?>> _images = new(StringComparer.Ordinal);
 
+    private int _probing;
+
     public ModInfoService(LauncherPaths paths)
     {
         var root = Path.Combine(paths.DataRoot, "modinfo");
         _client = new SpaceDockClient(root, maxParallelRequests: 8);
         _thumbDir = Path.Combine(root, "thumbs");
+        _client.AvailabilityChanged += () =>
+        {
+            if (IsSpaceDockDown)
+            {
+                _ = ProbeUntilBackAsync();
+            }
+            SpaceDockAvailabilityChanged?.Invoke();
+        };
+    }
+
+    /// <summary>SpaceDock is failing right now (it is the only source of mod pictures and long descriptions).</summary>
+    public bool IsSpaceDockDown => _client.UnavailableSinceUtc is not null;
+
+    /// <summary>Raised on a background thread when SpaceDock goes down or comes back.</summary>
+    public event Action? SpaceDockAvailabilityChanged;
+
+    /// <summary>While SpaceDock is down: one check a minute instead of a request per row.</summary>
+    private async Task ProbeUntilBackAsync()
+    {
+        if (Interlocked.Exchange(ref _probing, 1) == 1)
+        {
+            return;
+        }
+        try
+        {
+            while (IsSpaceDockDown)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(60)).ConfigureAwait(false);
+                await _client.ProbeAsync(CancellationToken.None).ConfigureAwait(false);
+            }
+        }
+        catch (Exception)
+        {
+            // A failed probe just means another one in a minute (the loop condition is re-read).
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _probing, 0);
+        }
     }
 
     public Task<ModInfo?> GetAsync(CatalogEntry entry)
-        => SpaceDockClient.IdFromUrl(entry.SpaceDock) is int id
-            ? _infos.GetOrAdd(id, i => _client.GetAsync(i, CancellationToken.None))
-            : Task.FromResult<ModInfo?>(null);
+    {
+        if (SpaceDockClient.IdFromUrl(entry.SpaceDock) is not int id)
+        {
+            return Task.FromResult<ModInfo?>(null);
+        }
+        var task = _infos.GetOrAdd(id, i => _client.GetAsync(i, CancellationToken.None));
+        ForgetIfOutage(task, () => _infos.TryRemove(new KeyValuePair<int, Task<ModInfo?>>(id, task)));
+        return task;
+    }
+
+    /// <summary>A result that came back empty because SpaceDock was down is not kept, so it is asked again later.</summary>
+    private void ForgetIfOutage<T>(Task<T?> task, Action forget) where T : class
+        => _ = task.ContinueWith(t =>
+        {
+            if (t.IsCompletedSuccessfully && t.Result is null && IsSpaceDockDown)
+            {
+                forget();
+            }
+        }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
 
     /// <summary>
     /// The mod's SpaceDock picture at row size, or null (not on SpaceDock, no picture). A cached tile loads straight
@@ -61,6 +118,10 @@ public sealed class ModInfoService
             return existing;
         }
         var file = Path.Combine(_thumbDir, $"sd{id}-{RowWidth}.jpg");
+        if (!IsFresh(file) && IsSpaceDockDown)
+        {
+            return Task.FromResult<ImageSource?>(null); // nothing cached and nobody to ask: placeholder until it is back
+        }
         var task = IsFresh(file)
             ? Task.Run<ImageSource?>(() => Decode(file, 0))
             : _scheduler.Run(async () =>
@@ -69,6 +130,7 @@ public sealed class ModInfoService
                 return info?.HeaderImage is { } url ? await DeriveAsync(url, RowWidth, file).ConfigureAwait(false) : null;
             });
         _images[key] = task;
+        ForgetIfOutage(task, () => _images.TryRemove(new KeyValuePair<string, Task<ImageSource?>>(key, task)));
         return task;
     }
 
@@ -92,6 +154,7 @@ public sealed class ModInfoService
             ? Task.Run<ImageSource?>(() => Decode(file, 0))
             : _scheduler.Run(() => DeriveAsync(url, width, file));
         _images[key] = task;
+        ForgetIfOutage(task, () => _images.TryRemove(new KeyValuePair<string, Task<ImageSource?>>(key, task)));
         return task;
     }
 

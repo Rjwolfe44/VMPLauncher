@@ -134,6 +134,13 @@
         <!-- Notices -->
         <StackPanel Grid.Row="1">
             <ContentControl Content="{Binding Error}" ContentTemplate="{StaticResource ErrorCardTemplate}" Visibility="{Binding Error, Converter={StaticResource NullToVisibility}}" Focusable="False" />
+            <Border Style="{StaticResource Space.Card}" Padding="16,10" Margin="0,14,0,0" Visibility="{Binding SpaceDockDown, Converter={StaticResource BoolToVisibility}}">
+                <StackPanel Orientation="Horizontal">
+                    <ui:SymbolIcon Symbol="CloudOff24" Foreground="{StaticResource Space.Status.WarningBrush}" Margin="0,0,12,0" VerticalAlignment="Center" />
+                    <TextBlock Style="{StaticResource Space.Style.Body}" TextWrapping="Wrap" VerticalAlignment="Center"
+                               Text="SpaceDock isn't responding right now, so some mod pictures and full descriptions are missing. They fill in by themselves when it's back." />
+                </StackPanel>
+            </Border>
             <Border Style="{StaticResource Space.Card}" Padding="16,12" Margin="0,14,0,0" Visibility="{Binding IsReadOnly, Converter={StaticResource BoolToVisibility}}">
                 <Grid>
                     <Grid.ColumnDefinitions>

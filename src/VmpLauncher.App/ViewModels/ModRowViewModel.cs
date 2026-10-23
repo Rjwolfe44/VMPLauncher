@@ -138,6 +138,16 @@ public sealed partial class ModRowViewModel : ObservableObject
         }
     }
 
+    /// <summary>Asks for the picture again (SpaceDock came back after an outage) if this row has none yet.</summary>
+    public void RetryThumbnail()
+    {
+        if (_thumbnail is null)
+        {
+            _thumbRequested = false;
+            OnPropertyChanged(nameof(Thumbnail));
+        }
+    }
+
     /// <summary>Takes fresh catalog data (after a refresh or an apply) without losing the loaded picture.</summary>
     public void Update(CatalogEntry entry)
     {

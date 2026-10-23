@@ -56,6 +56,8 @@ public sealed class SpaceDockClient
     private readonly TimeSpan _maxAge;
     private readonly HttpClient _http;
     private readonly SemaphoreSlim _gate;
+    private readonly object _availability = new();
+    private DateTimeOffset? _unavailableSince;
 
     /// <param name="cacheDir">Root folder for the cache; <c>spacedock\</c> and <c>img\</c> are created under it.</param>
     /// <param name="handler">Tests only: replaces the network. The caller keeps ownership of it.</param>
@@ -69,6 +71,44 @@ public sealed class SpaceDockClient
         _imageDir = Path.Combine(cacheDir, "img");
         _maxAge = maxAge ?? TimeSpan.FromDays(7);
         _http = handler is null ? SharedHttp : CreateClient(handler);
+    }
+
+    /// <summary>When SpaceDock started failing (server errors, timeouts, no network); null while it answers.</summary>
+    public DateTimeOffset? UnavailableSinceUtc
+    {
+        get { lock (_availability) { return _unavailableSince; } }
+    }
+
+    /// <summary>Raised (on a background thread) when SpaceDock goes down or comes back.</summary>
+    public event Action? AvailabilityChanged;
+
+    private void Report(bool answered)
+    {
+        bool changed;
+        lock (_availability)
+        {
+            var wasDown = _unavailableSince is not null;
+            if (answered)
+            {
+                _unavailableSince = null;
+            }
+            else
+            {
+                _unavailableSince ??= DateTimeOffset.UtcNow;
+            }
+            changed = wasDown != (_unavailableSince is not null);
+        }
+        if (changed)
+        {
+            AvailabilityChanged?.Invoke();
+        }
+    }
+
+    /// <summary>One uncached request to see whether SpaceDock answers again; true when it does.</summary>
+    public async Task<bool> ProbeAsync(CancellationToken ct)
+    {
+        var (outcome, _) = await FetchJsonAsync(141, ct).ConfigureAwait(false);
+        return outcome != FetchOutcome.Failed;
     }
 
     /// <summary>"https://spacedock.info/mod/1234/Some%20Name" or ".../mod/1234" gives 1234; anything else gives null.</summary>
@@ -165,6 +205,14 @@ public sealed class SpaceDockClient
             using var req = new HttpRequestMessage(HttpMethod.Get, imageUrl);
             req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("image/*"));
             using var resp = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, timeout.Token).ConfigureAwait(false);
+            if ((int)resp.StatusCode >= 500 && IsSpaceDock(imageUrl))
+            {
+                Report(answered: false);
+            }
+            else if (IsSpaceDock(imageUrl))
+            {
+                Report(answered: true);
+            }
             if (!resp.IsSuccessStatusCode || resp.Content.Headers.ContentLength > MaxImageBytes)
             {
                 return null;
@@ -212,6 +260,10 @@ public sealed class SpaceDockClient
         }
         catch (Exception ex) when (IsNetworkFailure(ex, ct))
         {
+            if (IsSpaceDock(imageUrl))
+            {
+                Report(answered: false);
+            }
             return null;
         }
         finally
@@ -219,6 +271,8 @@ public sealed class SpaceDockClient
             _gate.Release();
         }
     }
+
+    private static bool IsSpaceDock(Uri url) => url.Host.EndsWith("spacedock.info", StringComparison.OrdinalIgnoreCase);
 
     // --- network ---
 
@@ -237,17 +291,21 @@ public sealed class SpaceDockClient
             using var resp = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, timeout.Token).ConfigureAwait(false);
             if (resp.StatusCode == HttpStatusCode.NotFound)
             {
+                Report(answered: true);
                 return (FetchOutcome.NotFound, null);
             }
             if (!resp.IsSuccessStatusCode)
             {
+                Report(answered: (int)resp.StatusCode < 500);
                 return (FetchOutcome.Failed, null);
             }
             var body = await ReadCappedAsync(resp.Content, MaxJsonBytes, timeout.Token).ConfigureAwait(false);
+            Report(answered: true);
             return body is null ? (FetchOutcome.Failed, null) : (FetchOutcome.Found, body);
         }
         catch (Exception ex) when (IsNetworkFailure(ex, ct))
         {
+            Report(answered: false);
             return (FetchOutcome.Failed, null);
         }
         finally

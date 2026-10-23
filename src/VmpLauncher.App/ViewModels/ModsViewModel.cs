@@ -63,6 +63,23 @@ public sealed partial class ModsViewModel : ObservableObject
             Requery();
         };
         setups.Changed += () => System.Windows.Application.Current?.Dispatcher.BeginInvoke(RefreshSetups);
+        // SpaceDock (pictures, long descriptions) going down shows a notice; coming back fills the pictures in.
+        info.SpaceDockAvailabilityChanged += () => System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+        {
+            var wasDown = SpaceDockDown;
+            SpaceDockDown = _info.IsSpaceDockDown;
+            if (wasDown && !SpaceDockDown)
+            {
+                foreach (var row in _rowCache.Values)
+                {
+                    row.RetryThumbnail();
+                }
+                if (Details is { } open)
+                {
+                    OpenDetails(open.Row);
+                }
+            }
+        });
         // An installed or updated pack changes the pack setup's pins.
         launcher.StateChanged += () =>
         {
@@ -120,6 +137,7 @@ public sealed partial class ModsViewModel : ObservableObject
     [ObservableProperty] private string _pendingLine = string.Empty;
     [ObservableProperty] private bool _hasPending;
     [ObservableProperty] private UserFacingError? _error;
+    [ObservableProperty] private bool _spaceDockDown;
 
     public bool CanPlaySetup => SelectedSetup is { IsPack: false, IsReady: true };
     public bool CanManageSetup => SelectedSetup is { IsPack: false };
