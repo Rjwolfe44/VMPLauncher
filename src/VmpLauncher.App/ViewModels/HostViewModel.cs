@@ -236,7 +236,18 @@ public partial class HostViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void OpenTokenPage() => System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("https://github.com/settings/personal-access-tokens/new") { UseShellExecute = true });
+    private void OpenTokenPage()
+    {
+        // GitHub pre-fills name, owner, expiry and Contents: read-only from the URL; the repository itself must still be
+        // picked by hand ("Only select repositories"), GitHub has no parameter for it.
+        var owner = (SelectedRepo ?? "Rjwolfe44/x").Split('/')[0];
+        var url = "https://github.com/settings/personal-access-tokens/new"
+                  + "?name=" + Uri.EscapeDataString("VMP private mods (friends)")
+                  + "&description=" + Uri.EscapeDataString($"Read-only access for VMP Launcher invite codes. Repository: {SelectedRepo ?? "your private mods repo"} only.")
+                  + "&target_name=" + Uri.EscapeDataString(owner)
+                  + "&expires_in=none&contents=read";
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true });
+    }
 
     [RelayCommand]
     private void CopyLog()

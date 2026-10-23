@@ -146,7 +146,7 @@
                                 <Expander Header="Set up or replace the read-only token" Margin="0,8,0,0">
                                     <StackPanel Margin="0,6,0,0">
                                         <TextBlock Style="{StaticResource Space.Style.Caption}" LineHeight="18"
-                                                   Text="On GitHub: Settings, Developer settings, Fine-grained tokens, Generate new token. Repository access: only the private mods repository. Permissions: Contents read-only. Pick the longest expiry. Never paste your own login token here; every friend gets a copy of this one." />
+                                                   Text="Opens GitHub with the name, Contents: read-only and no expiry filled in. Under Repository access choose Only select repositories and pick the private mods repository, then Generate token and paste it here. Never paste your own login token; every friend gets a copy of this one." />
                                         <Button Style="{StaticResource Space.Button.Link}" Content="Open GitHub's token page" Command="{Binding OpenTokenPageCommand}" HorizontalAlignment="Left" Margin="-6,6,0,0" />
                                         <Grid Margin="0,6,0,0">
                                             <Grid.ColumnDefinitions>
