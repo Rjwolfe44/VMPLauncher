@@ -105,12 +105,20 @@ public sealed class PackExporter
             policySha = Sha256Util.HashFile(dst, ct);
         }
 
-        // 4. Lock + inventory.
-        var packSha = Sha256Util.HashFile(r.PackFile, ct);
+        // 4. Lock + inventory. The pack definition shipped with the version carries the version actually built.
+        var packCopy = Path.Combine(versionDir, Path.GetFileName(r.PackFile));
+        if (r.VersionOverride is not null)
+        {
+            LauncherJson.WriteFile(packCopy, pack);
+        }
+        else
+        {
+            File.Copy(r.PackFile, packCopy, overwrite: true);
+        }
+        var packSha = Sha256Util.HashFile(packCopy, ct);
         var gen = new LockGenerator(_log).Generate(new LockGenerator.Request(r.HostKspDir, r.HostCacheDir, pack, versionDir, r.Paths, VerifyHostHashes: false, packSha,
             new LockGenerator.Extras(customModules, customInventory, capture.Overrides, requiredClient, policySha)), ct);
         warnings.AddRange(gen.Warnings);
-        File.Copy(r.PackFile, Path.Combine(versionDir, Path.GetFileName(r.PackFile)), overwrite: true);
 
         // 5. Sanitized client settings template (allow-list built, never copied from the real file).
         WriteSettingsTemplate(Path.Combine(versionDir, "client-settings-template.xml"), pack);

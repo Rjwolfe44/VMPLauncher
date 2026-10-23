@@ -12,5 +12,6 @@
     <ProjectReference Include="..\..\src\VmpLauncher.Net\VmpLauncher.Net.csproj" />
     <ProjectReference Include="..\..\src\VmpLauncher.Game\VmpLauncher.Game.csproj" />
     <ProjectReference Include="..\..\src\VmpLauncher.App\VmpLauncher.App.csproj" />
+    <ProjectReference Include="..\..\src\VmpLauncher.Publishing\VmpLauncher.Publishing.csproj" />
   </ItemGroup>
 </Project>

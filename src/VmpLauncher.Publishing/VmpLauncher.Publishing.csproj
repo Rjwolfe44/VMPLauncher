@@ -8,6 +8,7 @@
     <ProjectReference Include="..\VmpLauncher.Core\VmpLauncher.Core.csproj" />
     <ProjectReference Include="..\VmpLauncher.Ckan\VmpLauncher.Ckan.csproj" />
     <ProjectReference Include="..\VmpLauncher.Game\VmpLauncher.Game.csproj" />
+    <ProjectReference Include="..\VmpLauncher.Net\VmpLauncher.Net.csproj" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="VmpLauncher.Tests" />

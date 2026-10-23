@@ -40,12 +40,22 @@ $vmpl = "src\VmpLauncher.Cli\bin\Debug\net10.0-windows\win-x64\vmpl.exe"
 # one-time: signing key (set VMPL_KEY_PASSPHRASE first)
 & $vmpl key generate --key-id vmp-host-2026a --owner Rjwolfe44
 
-# export the current install as a pack (local only; nothing is published)
-& $vmpl capture --pack packs\vmp-train-career\vmp-train-career.vmpack.json `
+# one-time: where the host install, the packs repository and the game server are (stays in %APPDATA%, never in a repo)
+& $vmpl publish-config --pack packs\vmp-train-career\vmp-train-career.vmpack.json `
     --ksp "C:\Users\rjwol\Desktop\Kerbal Space Program" --cache "$env:LOCALAPPDATA\CKAN\downloads" `
-    --out out --policy "..\VMP\HOSTING\KSPModControl.xml" --private-connection "..\VMP\HOSTING\connection.private.json" `
-    --key-id vmp-host-2026a
-& $vmpl verify-export out\vmp-train-career\<version>
+    --packs-repo ..\VMP-Packs --export-root out --policy "..\VMP\HOSTING\KSPModControl.xml" `
+    --private-connection "..\VMP\HOSTING\connection.private.json" --key-id vmp-host-2026a `
+    --server-host trainpc --server-root "C:\Users\The Strip\Desktop\VMP Server" --local-server-config "..\VMP\HOSTING\VMPServer\Config"
+
+# release a pack version: policy -> export -> verify -> stage -> push + server update
+& $vmpl publish --pack packs\vmp-train-career\vmp-train-career.vmpack.json --notes "What changed"            # dry run: prints every external command
+& $vmpl publish --pack packs\vmp-train-career\vmp-train-career.vmpack.json --notes "What changed" --execute  # asks you to type PUBLISH
+& $vmpl verify-remote --pack-id vmp-train-career                                                             # what friends will see, incl. route probes
+
+# lower-level pieces, if you need them
+& $vmpl capture ...            # export only (what publish does in step 2)
+& $vmpl verify-export <dir>    # validate an export or staged version folder
+& $vmpl policy update --policy ..\VMP\HOSTING\KSPModControl.xml --game "C:\Users\rjwol\Desktop\Kerbal Space Program"
 
 # package the launcher
 .\build.ps1 -Version 0.1.0            # artifacts\releases\VmpLauncher-win-Setup.exe (+ portable zip, nupkg)
@@ -57,6 +67,17 @@ registry), custom packages (local mods such as the VMP client or ApexGuidance, e
 `private-sideload`), file rules (what is generated/per-player/mutable), overrides, and server presets (no passwords).
 `capture` classifies every file in the host GameData, refuses to ship unknown DLLs, scans every output file for the
 host's real secrets, and writes the lock + inventory + assets.
+
+`publish` is the whole release in one command. It re-hashes the server policy's DLL list against the host GameData
+(a rebuilt mod is just a hash change; a mod added or removed stops the run and asks for a file generated in-game with
+`--policy-generated`, because only the game knows the part list), checks the host passes that policy, exports and
+signs the pack, verifies the export, stages it into the packs repository layout (version folder, channel pointer,
+current policy, changelog entry from the lock diff, `servers.json` build bump, catalog/share/.gitattributes), and
+verifies the staged copy again. Without `--execute` the staging goes to a scratch mirror and every external command
+is printed verbatim. With `--execute` it refuses a dirty or stale repository, creates missing GitHub release assets
+and checks their hash after upload, commits and pushes, uploads the policy to the server over SSH (checksum, backup,
+stop, replace, start, confirm running) only when the policy changed, then fetches everything back from the public
+URLs and probes the routes. Private packages are never uploaded; their file names are listed for hand-out.
 
 ## Layout
 

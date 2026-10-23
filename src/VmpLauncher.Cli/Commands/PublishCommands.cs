@@ -178,49 +178,25 @@ internal static class PublishCommands
     {
         var dir = new Argument<string>("dir") { Description = "Export version directory." };
         var keysFile = new Option<string?>("--keys") { Description = "Extra trusted-keys JSON." };
-        var cmd = new Command("verify-export", "Validate an export folder: lock/inventory consistency, signatures, asset hashes, secret patterns") { dir, keysFile };
+        var assets = new Option<string[]>("--assets") { Description = "Extra folder(s) to look for custom-package zips in (a staged repository folder has none)." };
+        var cmd = new Command("verify-export", "Validate an export or staged version folder: lock/inventory consistency, signatures, asset hashes, secret patterns") { dir, keysFile, assets };
         cmd.SetAction(parse =>
         {
             var d = parse.GetValue(dir)!;
-            var lockPath = Directory.EnumerateFiles(d, "*.vmpack.lock.json").FirstOrDefault();
-            if (lockPath is null)
+            if (!Directory.EnumerateFiles(d, "*.vmpack.lock.json").Any())
             {
                 Console.Error.WriteLine("No lock in that folder.");
                 return 2;
             }
-            var problems = new List<string>();
-            var (lockDoc, inventory, _) = ProfileOperations.LoadAndValidate(new ProfileOperations.LockSource(lockPath, Path.Combine(d, "inventory.json.gz")));
-            Console.WriteLine($"lock {lockDoc.Pack.Id} {lockDoc.Pack.Version}: {lockDoc.Ckan.Modules.Count} modules, {inventory.Files.Count} files, {lockDoc.Overrides.Count} overrides");
-            var verifier = SignatureVerifier.Default(parse.GetValue(keysFile));
-            var trust = verifier.VerifyFile(lockPath, out var kid, out var reason);
-            Console.WriteLine($"signature: {SignatureVerifier.DescribeTrust(trust)}{(kid is null ? "" : $" ({kid})")}{(reason is null ? "" : $" - {reason}")}");
-            foreach (var m in lockDoc.Ckan.Modules.Where(m => m.Origin == Core.Locking.ModuleOrigin.Custom))
-            {
-                var file = Directory.EnumerateFiles(d, m.Artifact!.FileName ?? "*", SearchOption.AllDirectories).FirstOrDefault();
-                if (file is null)
-                {
-                    problems.Add($"{m.Identifier}: asset {m.Artifact.FileName} missing from export");
-                    continue;
-                }
-                var sha = Core.Hashing.Sha256Util.HashFile(file);
-                if (!Core.Hashing.Sha256Util.HexEquals(sha, m.Artifact.Sha256))
-                {
-                    problems.Add($"{m.Identifier}: asset hash mismatch");
-                }
-                if (new FileInfo(file).Length >= 2L * 1024 * 1024 * 1024)
-                {
-                    problems.Add($"{m.Identifier}: asset is 2 GiB or larger; GitHub Releases rejects it");
-                }
-            }
-            var scanner = new SecretScanner();
-            var findings = scanner.ScanDirectory(d);
-            problems.AddRange(findings.Select(f => $"secret pattern: {Path.GetRelativePath(d, f.File)}{(f.Entry is null ? "" : "!" + f.Entry)}: {f.What}"));
-            foreach (var p in problems)
+            var r = ExportVerifier.Verify(d, parse.GetValue(keysFile), parse.GetValue(assets));
+            Console.WriteLine($"lock {r.Lock.Pack.Id} {r.Lock.Pack.Version}: {r.Lock.Ckan.Modules.Count} modules, {r.Lock.Inventory.FileCount} files, {r.Lock.Overrides.Count} overrides");
+            Console.WriteLine($"signature: {SignatureVerifier.DescribeTrust(r.Trust)}{(r.KeyId is null ? "" : $" ({r.KeyId})")}");
+            foreach (var p in r.Problems)
             {
                 Console.WriteLine($"  problem: {p}");
             }
-            Console.WriteLine(problems.Count == 0 ? "export OK" : $"{problems.Count} problem(s)");
-            return problems.Count == 0 ? 0 : 3;
+            Console.WriteLine(r.Ok ? "export OK" : $"{r.Problems.Count} problem(s)");
+            return r.Ok ? 0 : 3;
         });
         return cmd;
     }
