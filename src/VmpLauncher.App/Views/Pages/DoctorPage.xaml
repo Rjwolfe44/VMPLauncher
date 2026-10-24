@@ -35,10 +35,18 @@
                                    ToolTip="Builds a fresh copy and keeps your saves, craft, screenshots and settings. Asks first." />
                         <ui:Button Content="Copy report" Icon="{ui:SymbolIcon Copy24}" Margin="0,0,8,8" Command="{Binding CopyPackReportCommand}"
                                    ToolTip="Copies versions, the pack state and the end of the log (passwords and your user name removed) to send to the host" />
+                        <ui:Button Content="Send my logs" Icon="{ui:SymbolIcon FolderZip24}" Margin="0,0,8,8" Command="{Binding Recovery.SendLogsCommand}"
+                                   ToolTip="Makes one small zip on your Desktop with the game log, the launcher logs and a report (your user name and passwords removed), then shows it in Explorer. Drop it in Discord for the host." />
                         <ui:Button Content="Open logs" Icon="{ui:SymbolIcon FolderOpen24}" Margin="0,0,8,8" Command="{Binding OpenLogsCommand}" />
                     </WrapPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8" Visibility="{Binding Recovery.IsSendingLogs, Converter={StaticResource BoolToVisibility}}">
+                        <ui:ProgressRing IsIndeterminate="True" Width="16" Height="16" Margin="0,0,8,0" />
+                        <TextBlock Style="{StaticResource Space.Style.Secondary}" Text="{Binding Recovery.LogsStatus}" VerticalAlignment="Center" />
+                    </StackPanel>
                     <TextBlock Style="{StaticResource Space.Style.Caption}" TextWrapping="Wrap" Margin="0,2,0,0"
                                Text="Try them in order: Repair fixes changed or missing files, Restore fixes an interrupted update, and Reinstall rebuilds everything else while keeping your own files. Your own KSP folder is never touched." />
+                    <TextBlock Style="{StaticResource Space.Style.Caption}" TextWrapping="Wrap" Margin="0,6,0,0"
+                               Text="Still wrong, or the game acts up? Send my logs puts the game log (shrunk to a few MB), the launcher logs and a report in one zip on your Desktop, with your Windows user name and passwords removed. Drop it in Discord for the host." />
                     <ContentControl Content="{Binding PackError}" ContentTemplate="{StaticResource ErrorCardTemplate}" Visibility="{Binding PackError, Converter={StaticResource NullToVisibility}}" Focusable="False" />
                 </StackPanel>
             </Border>

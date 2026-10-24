@@ -105,9 +105,9 @@ public partial class MainWindow : FluentWindow
 
     private void ShowOutcome(OperationOutcome o)
     {
-        if (o.Kind == OperationKind.Publish)
+        if (o.Kind is OperationKind.Publish or OperationKind.Logs)
         {
-            return; // the Host page reports its own result
+            return; // the Host page and "Send my logs" report their own result
         }
         var (appearance, icon, title) = o.Succeeded
             ? (ControlAppearance.Success, SymbolRegular.CheckmarkCircle24, o.Title + " finished")

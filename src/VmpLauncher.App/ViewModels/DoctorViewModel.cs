@@ -53,6 +53,9 @@ public partial class DoctorViewModel : ObservableObject
 
     public ObservableCollection<DoctorStepViewModel> Steps { get; } = new();
 
+    /// <summary>The shared recovery actions, for the card's "Send my logs" button and its progress text (bound as <c>Recovery.SendLogsCommand</c>).</summary>
+    public RecoveryActions Recovery => _recovery;
+
     [ObservableProperty] private bool _isRunning;
     [ObservableProperty] private string _headline = "Checks your internet, the server routes, your password and your game files, and says what to fix.";
     [ObservableProperty] private string _headlineKind = "neutral";

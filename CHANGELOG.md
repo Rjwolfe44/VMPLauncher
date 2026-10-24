@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.1
+
+Send my logs.
+
+- **Send my logs.** Doctor > Fix the pack copy has a new button that makes one small zip on your Desktop (named like
+  `VMP-logs-YourName-20261024-041200.zip`) and shows it in Explorer, ready to drop in Discord for the host. It holds the
+  game log (a 100 MB `KSP.log` becomes about 4 MB), Unity's `Player.log`, the launcher's recent logs, VMP's sync traces
+  if there are any, the same report as Copy report, a short `incident-extract.txt` with just the errors, crashes and
+  vessel losses from the game log, and a `README.txt` that says what is inside. Your Windows user name is replaced with
+  `<user>` everywhere, and the server password and private-mod tokens are removed. It only reads your files, works while
+  KSP is running, and still makes the zip when something is missing (it tells you what).
+
 ## 0.4.0
 
 Vlad's mod library.

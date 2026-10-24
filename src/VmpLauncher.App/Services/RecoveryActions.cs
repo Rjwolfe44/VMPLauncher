@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using VmpLauncher.Core;
 using VmpLauncher.Core.Diagnostics;
+using VmpLauncher.Game;
 using VmpLauncher.Net.Doctor;
 using Wpf.Ui;
 using Wpf.Ui.Controls;
@@ -22,6 +23,9 @@ public sealed record RecoveryResult(RecoveryHint Action, string Message, UserFac
 /// </summary>
 public sealed partial class RecoveryActions : ObservableObject
 {
+    /// <summary>Set to anything to skip opening Explorer after "Send my logs" (UI automation and CI must not pop windows over a running game).</summary>
+    public const string NoRevealVariable = "VMPL_NO_REVEAL";
+
     private readonly LauncherService _launcher;
     private readonly IAppNavigator _navigation;
     private readonly IContentDialogService _dialogs;
@@ -49,6 +53,15 @@ public sealed partial class RecoveryActions : ObservableObject
     public static RecoveryActions? Instance { get; private set; }
 
     public event Action<RecoveryResult>? Completed;
+
+    /// <summary>True while a logs zip is being made; the button is off meanwhile, so a double click makes one zip.</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SendLogsCommand))]
+    private bool _isSendingLogs;
+
+    /// <summary>What "Send my logs" is doing right now ("Reading the game log… 42%"), for the card next to the button.</summary>
+    [ObservableProperty]
+    private string _logsStatus = string.Empty;
 
     [RelayCommand]
     private async Task FixAsync(UserFacingError? error)
@@ -166,6 +179,141 @@ public sealed partial class RecoveryActions : ObservableObject
         }
     }
 
+    /// <summary>
+    /// "Send my logs": one small zip on the Desktop (the game log, the launcher logs and a report, with the Windows user name
+    /// and the secrets removed) to drop in Discord for the host; Explorer opens with it selected. It only reads, so it also
+    /// runs while another operation is stuck; otherwise it shows up as an operation with progress.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanSendLogs))]
+    private async Task SendLogsAsync()
+    {
+        IsSendingLogs = true;
+        LogsStatus = "Collecting the logs…";
+        try
+        {
+            var options = BuildLogBundleOptions();
+            var progress = new Progress<LogBundleProgress>(p =>
+            {
+                LogsStatus = p.Percent is > 0 and < 100 ? $"{p.Message}… {p.Percent}%" : $"{p.Message}…";
+                _launcher.Runner.Report(p.Message, p.Percent);
+            });
+            LogBundleResult result;
+            try
+            {
+                result = await _launcher.Runner.RunAsync(OperationKind.Logs, "Collecting logs for the host", (_, ct) => Task.Run(() => LogBundle.Build(options, progress, ct), ct));
+            }
+            catch (LauncherException ex) when (ex.Code == ErrorCode.ProfileBusy)
+            {
+                // An install or repair is running (maybe the very one that is failing): reading logs does not touch it, so don't wait for it.
+                result = await Task.Run(() => LogBundle.Build(options, progress, CancellationToken.None));
+            }
+            RevealInExplorer(result.Path);
+            var message = $"Saved {Path.GetFileName(result.Path)} ({LogBundle.FormatBytes(result.ZipBytes)}). Drop it in Discord for the host.";
+            if (result.Missing.Count > 0)
+            {
+                message += $" Not included: {string.Join(", ", result.Missing.Select(m => m.Split(':')[0]))}.";
+            }
+            _snackbar.Show("Logs ready", message, result.Missing.Count > 0 ? ControlAppearance.Caution : ControlAppearance.Success,
+                new SymbolIcon(SymbolRegular.FolderZip24), TimeSpan.FromSeconds(14));
+        }
+        catch (OperationCanceledException)
+        {
+            _snackbar.Show("Cancelled", "No logs were saved.", ControlAppearance.Info, new SymbolIcon(SymbolRegular.Warning24), TimeSpan.FromSeconds(5));
+        }
+        catch (Exception ex)
+        {
+            _log.LogError(ex, "Send my logs failed");
+            _snackbar.Show("Could not collect the logs", ShortReason(ex), ControlAppearance.Danger, new SymbolIcon(SymbolRegular.ErrorCircle24), TimeSpan.FromSeconds(10));
+        }
+        finally
+        {
+            IsSendingLogs = false;
+            LogsStatus = string.Empty;
+        }
+    }
+
+    private bool CanSendLogs() => !IsSendingLogs;
+
+    private static string ShortReason(Exception ex) => ex switch
+    {
+        UnauthorizedAccessException => "Windows would not let the launcher write to your Desktop. Try Copy report instead.",
+        IOException io when (io.HResult & 0xFFFF) is 0x27 or 0x70 => "There is not enough free disk space for the zip.",
+        IOException io => $"A file could not be read or written: {io.Message}",
+        _ => $"Something went wrong ({ex.GetType().Name}). Try again, or use Copy report.",
+    };
+
+    private LogBundleOptions BuildLogBundleOptions()
+    {
+        var now = DateTimeOffset.Now;
+        var s = _settings.Current;
+        var player = s.PlayerName is { } name && VmpSettingsFile.PlayerNamePattern.IsMatch(name) ? name : "player";
+        var facts = new List<KeyValuePair<string, string>>
+        {
+            new("Launcher", $"{AppInfo.Version}, {(s.UpdateChannel == "beta" ? "beta" : "stable")} channel"),
+            new("Windows", Environment.OSVersion.Version.ToString()),
+            new("Player name", player),
+        };
+        string? gameDir = null;
+        try
+        {
+            gameDir = _launcher.ProfilePaths.GameDir;
+            var status = _launcher.GetStatus();
+            facts.Add(new("Pack", $"{status.Installed?.PackVersion ?? "not installed"} installed, {status.Pack?.Lock.Pack.Version ?? "not loaded"} newest ({status.State})"));
+            facts.Add(new("VMP client", _launcher.InstalledClient()?.ExactBuild ?? "not installed"));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or LauncherException)
+        {
+            facts.Add(new("Pack", $"unknown ({ex.Message})"));
+        }
+        var profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        return new LogBundleOptions
+        {
+            OutputPath = Path.Combine(OutputFolder(), $"VMP-logs-{player}-{now:yyyyMMdd-HHmmss}.zip"),
+            GameLogPath = gameDir is null ? null : Path.Combine(gameDir, "KSP.log"),
+            PlayerLogPath = string.IsNullOrEmpty(profile) ? null : Path.Combine(profile, "AppData", "LocalLow", "Squad", "Kerbal Space Program", "Player.log"),
+            LauncherLogsDir = _paths.LogsDir,
+            TraceDirs = gameDir is null ? [] : [Path.Combine(gameDir, "GameData", "VladMultiplayer", "Traces"), Path.Combine(gameDir, "GameData", "VladMultiplayer", "logs")],
+            ReportText = BuildReport(null),
+            UserNames = LogRedactor.CurrentUserNames(),
+            Secrets = CollectSecrets(),
+            Facts = facts,
+            Now = now,
+        };
+    }
+
+    /// <summary>The Desktop (wherever Windows or OneDrive keeps it), or Documents, or the launcher's own folder when neither exists.</summary>
+    private string OutputFolder()
+    {
+        foreach (var folder in new[] { Environment.SpecialFolder.DesktopDirectory, Environment.SpecialFolder.MyDocuments })
+        {
+            var path = Environment.GetFolderPath(folder);
+            if (!string.IsNullOrEmpty(path) && Directory.Exists(path))
+            {
+                return path;
+            }
+        }
+        return _paths.DataRoot;
+    }
+
+    /// <summary>The arguments that make Explorer open the folder with <paramref name="file"/> selected.</summary>
+    public static string ExplorerSelectArguments(string file) => $"/select,\"{file}\"";
+
+    private void RevealInExplorer(string file)
+    {
+        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable(NoRevealVariable)))
+        {
+            return;
+        }
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("explorer.exe", ExplorerSelectArguments(file)) { UseShellExecute = true });
+        }
+        catch (Exception ex) when (ex is IOException or System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            _log.LogWarning(ex, "Could not open Explorer on the logs zip");
+        }
+    }
+
     /// <summary>Plain-text report for the host: versions, pack state, the error and the end of today's log, with
     /// passwords, tokens and the Windows user name removed.</summary>
     public string BuildReport(UserFacingError? error)
@@ -211,12 +359,21 @@ public sealed partial class RecoveryActions : ObservableObject
         {
             sb.AppendLine(line);
         }
+        return ReportRedactor.Redact(sb.ToString(), CollectSecrets());
+    }
+
+    /// <summary>The server password and the private-repo tokens this PC holds: never allowed into anything shared.</summary>
+    private List<string> CollectSecrets()
+    {
         var secrets = new List<string?> { _secrets.Get(_launcher.PasswordKey) };
-        foreach (var repo in _launcher.CurrentPack?.Lock.Ckan.Modules.Select(m => m.Artifact?.Private?.Repo).OfType<string>().Distinct() ?? [])
+        var repos = (_launcher.CurrentPack?.Lock.Ckan.Modules.Select(m => m.Artifact?.Private?.Repo).OfType<string>() ?? [])
+            .Concat(_settings.Current.PrivateRepos)
+            .Distinct(StringComparer.OrdinalIgnoreCase);
+        foreach (var repo in repos)
         {
             secrets.Add(_secrets.Get(PrivateModsService.TokenKey(repo)));
         }
-        return ReportRedactor.Redact(sb.ToString(), secrets);
+        return secrets.OfType<string>().Where(s => s.Length > 0).Distinct().ToList();
     }
 
     private IEnumerable<string> RecentLog(int lines)

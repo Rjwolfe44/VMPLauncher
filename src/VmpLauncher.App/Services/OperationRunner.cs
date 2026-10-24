@@ -21,6 +21,8 @@ public enum OperationKind
     Setup,
     /// <summary>Rebuilding the pack copy from scratch, keeping the player's own files.</summary>
     Reinstall,
+    /// <summary>Collecting the logs into a zip for the host ("Send my logs"): read-only, touches nothing of the pack copy.</summary>
+    Logs,
 }
 
 /// <summary>Latest known state of the running operation; sampled by the UI at 10 Hz, never pushed per event.</summary>
@@ -102,7 +104,7 @@ public sealed partial class OperationRunner : ObservableObject
         catch (ObjectDisposedException)
         {
         }
-        Report("Cancelling… your previous setup is being restored.", percent: null);
+        Report(Snapshot?.Kind == OperationKind.Logs ? "Cancelling…" : "Cancelling… your previous setup is being restored.", percent: null);
     }
 
     public async Task<T> RunAsync<T>(OperationKind kind, string title, Func<IProgress<CkanProgress>, CancellationToken, Task<T>> work)
@@ -136,7 +138,7 @@ public sealed partial class OperationRunner : ObservableObject
         catch (OperationCanceledException)
         {
             cancelled = true;
-            message = "Cancelled. Your previous setup was kept.";
+            message = kind == OperationKind.Logs ? "Cancelled." : "Cancelled. Your previous setup was kept.";
             throw;
         }
         catch (Exception ex)

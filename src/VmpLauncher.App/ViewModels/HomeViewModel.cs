@@ -307,6 +307,7 @@ public partial class HomeViewModel : ObservableObject
                 OperationKind.Cleanup => ("Cleaning up", "checking"),
                 OperationKind.Mods => ("Changing mods", "checking"),
                 OperationKind.Setup => ("Making a setup", "checking"),
+                OperationKind.Logs => ("Collecting logs", "checking"),
                 _ => ("Working", "checking"),
             };
             if (_runner.Snapshot?.Kind == OperationKind.Publish)
@@ -321,7 +322,7 @@ public partial class HomeViewModel : ObservableObject
         var s = _runner.Snapshot;
         // Host publishing has its own page and log; the Home hero only shows the player's own installs and updates,
         // so its Cancel button can never stop a publish by accident.
-        var shown = s is not null && s.Kind is not (OperationKind.Publish or OperationKind.Cleanup or OperationKind.Mods or OperationKind.Setup);
+        var shown = s is not null && s.Kind is not (OperationKind.Publish or OperationKind.Cleanup or OperationKind.Mods or OperationKind.Setup or OperationKind.Logs);
         if (IsOperationRunning != shown || (s is null) != (_lastKind is null) || s?.Kind != _lastKind)
         {
             _lastKind = s?.Kind;

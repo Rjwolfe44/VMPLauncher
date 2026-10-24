@@ -123,9 +123,11 @@ public partial class MainWindowViewModel : ObservableObject
         // Home and Activity show installs themselves and Host tools shows publishing; the strip covers the rest.
         ActivityVisible = isPublish
             ? _navigator.Current is not (AppPage.Host or AppPage.Home)
-            : s.Kind is OperationKind.Mods or OperationKind.Setup
-                ? _navigator.Current is not (AppPage.Mods or AppPage.Activity)
-                : _navigator.Current is not (AppPage.Activity or AppPage.Home);
+            : s.Kind == OperationKind.Logs
+                ? _navigator.Current is not (AppPage.Doctor or AppPage.Activity) // the Doctor card shows its own progress
+                : s.Kind is OperationKind.Mods or OperationKind.Setup
+                    ? _navigator.Current is not (AppPage.Mods or AppPage.Activity)
+                    : _navigator.Current is not (AppPage.Activity or AppPage.Home);
         ActivityTitle = s.Title;
         ActivityPercent = pct;
         ActivityIndeterminate = s.Percent <= 0;
