@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.3.3
+
+Your own servers on the Play page.
+
+- **Add your own servers.** Play > Add server saves another address for the pack's server (for example its home-network
+  address, `192.168.1.20` or `192.168.1.20:8800`). It shows next to the host's routes with a live status, can be picked,
+  edited and removed, uses the password saved on the Play page, and stays on your PC. Names and addresses are checked
+  as you type (no duplicates, no `http://`, port 1 to 65535). The VMP window in KSP gets the same list, and a removed
+  server leaves it too.
+- **The host's own LAN route shows on the host PC.** Presets the host keeps off the published list (`exportable: false`,
+  like the home-network address) now appear on the Play page of the PC that holds the publisher key, so the host
+  doesn't have to add them by hand. Friends never see them.
+
 ## 0.3.2
 
 Ways out of a stuck pack copy, always one click away.

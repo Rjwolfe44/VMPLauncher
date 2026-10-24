@@ -26,7 +26,11 @@
                     <Border Style="{StaticResource Space.Card}">
                         <StackPanel>
                             <DockPanel Margin="0,0,0,12">
-                                <ui:Button DockPanel.Dock="Right" Content="Check now" Command="{Binding CheckRoutesCommand}" Icon="{ui:SymbolIcon ArrowSync24}" ToolTip="Re-check the server (F5)" />
+                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top">
+                                    <ui:Button Content="Add server" Command="{Binding AddServerCommand}" Icon="{ui:SymbolIcon Add24}" Margin="0,0,8,0"
+                                               ToolTip="Add another address for this server, such as its home-network address" AutomationProperties.Name="Add server" />
+                                    <ui:Button Content="Check now" Command="{Binding CheckRoutesCommand}" Icon="{ui:SymbolIcon ArrowSync24}" ToolTip="Re-check the server (F5)" />
+                                </StackPanel>
                                 <StackPanel>
                                     <TextBlock Style="{StaticResource Space.SectionTitle}" Text="Server" Margin="0" />
                                     <TextBlock Style="{StaticResource Space.Style.Caption}" Text="{Binding Server.Source}" />
@@ -47,6 +51,7 @@
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="*" />
                                                     <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="Auto" />
                                                 </Grid.ColumnDefinitions>
                                                 <StackPanel>
                                                     <TextBlock Style="{StaticResource Space.Style.Body}" FontWeight="SemiBold" Text="{Binding Name}" />
@@ -62,6 +67,15 @@
                                                         <TextBlock Style="{StaticResource Space.Style.Caption}" Text="{Binding Rtt}" Margin="6,0,0,0" Visibility="{Binding Rtt, Converter={StaticResource NullToVisibility}}" />
                                                     </StackPanel>
                                                 </Border>
+                                                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0"
+                                                            Visibility="{Binding IsMine, Converter={StaticResource BoolToVisibility}}">
+                                                    <ui:Button Appearance="Transparent" Icon="{ui:SymbolIcon Edit24}" Padding="8" ToolTip="Edit this server"
+                                                               Command="{Binding DataContext.EditServerCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"
+                                                               AutomationProperties.Name="Edit server" />
+                                                    <ui:Button Appearance="Transparent" Icon="{ui:SymbolIcon Delete24}" Padding="8" ToolTip="Remove this server"
+                                                               Command="{Binding DataContext.RemoveServerCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"
+                                                               AutomationProperties.Name="Remove server" />
+                                                </StackPanel>
                                             </Grid>
                                         </RadioButton>
                                     </DataTemplate>

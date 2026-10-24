@@ -423,6 +423,24 @@ public sealed class LauncherService : IDisposable
         return KspLauncher.Launch(new KspLauncher.LaunchSpec(profile.GameDir, routeEntryName, s.BorderlessWindow, extra));
     }
 
+    /// <summary>
+    /// Drops a server the player removed from the VMP client's own list (the Servers in its settings.xml), so it doesn't
+    /// linger in the in-game window. Does nothing when the pack copy has no settings file yet; never while KSP runs
+    /// (the mod saves its settings on exit and would write the entry back).
+    /// </summary>
+    public void ForgetVmpServer(string name)
+    {
+        var profile = ProfilePaths;
+        var path = VmpSettingsFile.PathFor(profile.GameDir);
+        if (!File.Exists(path) || (OperatingSystem.IsWindows() && GameProcessGuard.FindRunning(profile.GameDir).Count > 0))
+        {
+            return;
+        }
+        var doc = VmpSettingsFile.Load(path);
+        VmpSettingsFile.RemoveServer(doc, name);
+        VmpSettingsFile.Save(doc, path);
+    }
+
     private (string Path, DateTime Stamp, PackLock Lock)? _installedLockCache;
 
     /// <summary>The lock the profile was last installed from (its private copy), or null.</summary>

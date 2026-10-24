@@ -4,6 +4,9 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using VmpLauncher.App.Services;
 using VmpLauncher.Game;
+using VmpLauncher.Net.Directory;
+using Wpf.Ui;
+using Wpf.Ui.Controls;
 
 namespace VmpLauncher.App.ViewModels;
 
@@ -17,6 +20,7 @@ public partial class RouteCardViewModel : ObservableObject
     public string Kind { get; init; } = "direct";
     public string? Notes { get; init; }
     public string? RequiresSoftware { get; init; }
+    public string Origin { get; init; } = RouteOrigin.Pack;
     [ObservableProperty] private string _status = "Not checked";
     [ObservableProperty] private string _statusKind = "neutral"; // ok | warn | error | neutral | checking
     [ObservableProperty] private string _rtt = string.Empty;
@@ -24,12 +28,15 @@ public partial class RouteCardViewModel : ObservableObject
 
     public string Address => $"{Host}:{Port}";
 
+    /// <summary>A server the player added: it can be edited and removed.</summary>
+    public bool IsMine => Origin == RouteOrigin.Mine;
+
     public string KindLabel => Kind switch
     {
         "playit" => "Internet (Playit)",
         "zerotier" => "ZeroTier network",
         "lan" => "Home network",
-        _ => "Direct",
+        _ => IsMine ? "My server" : "Direct",
     };
 
     public string Hint => Notes ?? (RequiresSoftware is { } sw ? $"Needs {sw} on this PC." : Kind == "playit" ? "Works from anywhere, no extra software." : string.Empty);
@@ -50,10 +57,12 @@ public partial class PlayViewModel : ObservableObject
     private readonly ILogger<PlayViewModel> _log;
 
     private readonly PackUpdateService _packUpdates;
+    private readonly IContentDialogService _dialogs;
 
-    public PlayViewModel(LauncherService launcher, AppSettingsStore settings, ISecretStore secrets, ServerStatusService server, IAppNavigator navigation, PackUpdateService packUpdates, ILogger<PlayViewModel> log)
+    public PlayViewModel(LauncherService launcher, AppSettingsStore settings, ISecretStore secrets, ServerStatusService server, IAppNavigator navigation, PackUpdateService packUpdates, IContentDialogService dialogs, ILogger<PlayViewModel> log)
     {
         _launcher = launcher;
+        _dialogs = dialogs;
         _packUpdates = packUpdates;
         _settings = settings;
         _secrets = secrets;
@@ -146,6 +155,72 @@ public partial class PlayViewModel : ObservableObject
     {
         Server.Select(route);
         UpdatePreflight();
+    }
+
+    [RelayCommand]
+    private Task AddServerAsync() => EditServerCoreAsync(null);
+
+    [RelayCommand]
+    private Task EditServerAsync(RouteCardViewModel route) => route.IsMine ? EditServerCoreAsync(route) : Task.CompletedTask;
+
+    /// <summary>The Add server dialog; <paramref name="editing"/> is the server being changed, or null for a new one.</summary>
+    private async Task EditServerCoreAsync(RouteCardViewModel? editing)
+    {
+        var known = Server.KnownRoutes().Where(k => editing is null || !string.Equals(k.Name, editing.Name, StringComparison.OrdinalIgnoreCase)).ToList();
+        var vm = new AddServerViewModel(known, editing is null ? null : new MyServer(editing.Name, editing.Host, editing.Port));
+        var dialog = new ContentDialog
+        {
+            Title = editing is null ? "Add a server" : "Edit server",
+            Content = new Views.Dialogs.AddServerView { DataContext = vm },
+            PrimaryButtonText = "Save server",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            DialogMaxWidth = 620,
+        };
+        dialog.SetBinding(ContentDialog.IsPrimaryButtonEnabledProperty, new System.Windows.Data.Binding(nameof(AddServerViewModel.CanSave)) { Source = vm });
+        if (await _dialogs.ShowAsync(dialog, CancellationToken.None).ConfigureAwait(true) != ContentDialogResult.Primary || vm.Result is not { } server)
+        {
+            return;
+        }
+        if (editing is not null && !string.Equals(editing.Name, server.Name, StringComparison.OrdinalIgnoreCase))
+        {
+            ForgetInVmp(editing.Name);
+        }
+        await Server.SaveMineAsync(server, editing?.Name);
+        if (Routes.FirstOrDefault(r => r.IsMine && string.Equals(r.Name, server.Name, StringComparison.OrdinalIgnoreCase)) is { } added && editing is null)
+        {
+            Server.Select(added);
+        }
+        UpdatePreflight();
+    }
+
+    [RelayCommand]
+    private void RemoveServer(RouteCardViewModel route)
+    {
+        if (!route.IsMine)
+        {
+            return;
+        }
+        Server.RemoveMine(route.Name);
+        ForgetInVmp(route.Name);
+        UpdatePreflight();
+    }
+
+    /// <summary>Drops a removed server from the VMP client's own list too, unless KSP is running (it would write it back on exit).</summary>
+    private void ForgetInVmp(string name)
+    {
+        if (GameRunning)
+        {
+            return;
+        }
+        try
+        {
+            _launcher.ForgetVmpServer(name);
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "Could not remove {Server} from the VMP client's server list", name);
+        }
     }
 
     [RelayCommand]

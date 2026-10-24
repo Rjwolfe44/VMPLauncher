@@ -35,6 +35,8 @@ public sealed record AppSettings
     public string? ModsSetupId { get; init; }
     /// <summary>The player has used the Mods page, so its catalog is loaded in the background at start.</summary>
     public bool ModsOpened { get; init; }
+    /// <summary>Servers the player added on the Play page (for example the pack server's home-network address). Never published.</summary>
+    public List<VmpLauncher.Net.Directory.MyServer> MyServers { get; init; } = new();
 }
 
 public sealed class AppSettingsStore

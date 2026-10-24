@@ -3,6 +3,8 @@ using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Microsoft.Extensions.Logging;
 using VmpLauncher.App.ViewModels;
+using VmpLauncher.Core.Packs;
+using VmpLauncher.Net.Directory;
 
 namespace VmpLauncher.App.Services;
 
@@ -18,16 +20,19 @@ public sealed partial class ServerStatusService : ObservableObject
     private readonly ServerRoutesService _routes;
     private readonly IRouteStatusProvider _status;
     private readonly AppSettingsStore _settings;
+    private readonly HostToolsService _host;
     private readonly ILogger<ServerStatusService> _log;
     private readonly DispatcherTimer _timer;
     private readonly SemaphoreSlim _checkGate = new(1, 1);
     private string? _loadedFor;
+    private RoutesResult? _published;
 
-    public ServerStatusService(ServerRoutesService routes, IRouteStatusProvider status, AppSettingsStore settings, ILogger<ServerStatusService> log)
+    public ServerStatusService(ServerRoutesService routes, IRouteStatusProvider status, AppSettingsStore settings, HostToolsService host, ILogger<ServerStatusService> log)
     {
         _routes = routes;
         _status = status;
         _settings = settings;
+        _host = host;
         _log = log;
         _timer = new DispatcherTimer(DispatcherPriority.Background) { Interval = AutoInterval };
         _timer.Tick += async (_, _) => await CheckAllAsync(CancellationToken.None);
@@ -52,25 +57,83 @@ public sealed partial class ServerStatusService : ObservableObject
         {
             return;
         }
-        var result = await _routes.GetRoutesAsync(pack, ct);
+        _published = await _routes.GetRoutesAsync(pack, ct);
+        _loadedFor = pack.LockSha256;
+        Apply();
+        _timer.Start();
+        await CheckAllAsync(ct);
+    }
+
+    /// <summary>Rebuilds the list from the published routes, the host's private presets and the player's own servers.</summary>
+    private void Apply()
+    {
+        var result = _published!;
+        var hostOnly = _host.IsHost && _host.Pack is { } hostPack ? hostPack.Multiplayer.Servers : Array.Empty<ServerPreset>();
+        var merged = RouteMerger.Merge(result.Routes, hostOnly, _settings.Current.MyServers);
         var previous = Selected?.Id ?? _settings.Current.SelectedRouteId;
+        var before = Routes.ToDictionary(r => r.Id);
         Routes.Clear();
-        foreach (var r in result.Routes)
+        foreach (var r in merged)
         {
-            Routes.Add(new RouteCardViewModel { Id = r.Id, Name = r.Name, EntryName = r.EntryName, Host = r.Host, Port = r.Port, Kind = r.Kind, Notes = r.Notes, RequiresSoftware = r.RequiresSoftware });
+            var card = new RouteCardViewModel { Id = r.Id, Name = r.Name, EntryName = r.EntryName, Host = r.Host, Port = r.Port, Kind = r.Kind, Notes = r.Notes, RequiresSoftware = r.RequiresSoftware, Origin = r.Origin };
+            if (before.TryGetValue(r.Id, out var old) && old.Host == r.Host && old.Port == r.Port)
+            {
+                // Keep the last probe result, so adding a server doesn't blank the others while they re-check.
+                card.Status = old.Status;
+                card.StatusKind = old.StatusKind;
+                card.Rtt = old.Rtt;
+            }
+            Routes.Add(card);
         }
         var pick = Routes.FirstOrDefault(r => r.Id == previous) ?? Routes.FirstOrDefault();
         if (pick is not null)
         {
             pick.IsSelected = true;
         }
-        Source = result.Warning is null ? $"Routes from the {result.Source}." : $"Routes from the {result.Source}. {result.Warning}";
+        var own = merged.Count(r => r.Origin == RouteOrigin.Mine);
+        var text = result.Warning is null ? $"Routes from the {result.Source}." : $"Routes from the {result.Source}. {result.Warning}";
+        Source = own > 0 ? $"{text} Plus {own} of your own." : text;
         Motd = result.Motd;
         Maintenance = result.Maintenance;
-        _loadedFor = pack.LockSha256;
         OnPropertyChanged(nameof(Selected));
-        _timer.Start();
-        await CheckAllAsync(ct);
+        UpdateSummary();
+    }
+
+    /// <summary>Every route on the list, for the Add server dialog to check a new name or address against.</summary>
+    public IReadOnlyList<KnownRoute> KnownRoutes() => Routes.Select(r => new KnownRoute(r.Name, r.Host, r.Port)).ToList();
+
+    /// <summary>Saves a server of the player's own (replacing <paramref name="replacing"/> when editing it) and probes the list again.</summary>
+    public Task SaveMineAsync(MyServer server, string? replacing)
+    {
+        var selectedName = Selected is { Origin: RouteOrigin.Mine } s0 ? s0.Name : null;
+        _settings.Update(s => s with
+        {
+            MyServers = s.MyServers
+                .Where(m => !string.Equals(m.Name, replacing ?? server.Name, StringComparison.OrdinalIgnoreCase))
+                .Append(server)
+                .ToList(),
+        });
+        if (_published is not null)
+        {
+            Apply();
+        }
+        // An edited server that was the pick stays the pick under its new name.
+        if (replacing is not null && string.Equals(selectedName, replacing, StringComparison.OrdinalIgnoreCase)
+            && Routes.FirstOrDefault(r => r.Origin == RouteOrigin.Mine && string.Equals(r.Name, server.Name, StringComparison.OrdinalIgnoreCase)) is { } renamed)
+        {
+            Select(renamed);
+        }
+        return CheckAllAsync(CancellationToken.None);
+    }
+
+    /// <summary>Takes one of the player's servers off the list.</summary>
+    public void RemoveMine(string name)
+    {
+        _settings.Update(s => s with { MyServers = s.MyServers.Where(m => !string.Equals(m.Name, name, StringComparison.OrdinalIgnoreCase)).ToList() });
+        if (_published is not null)
+        {
+            Apply();
+        }
     }
 
     public void Select(RouteCardViewModel route)
