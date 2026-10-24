@@ -22,7 +22,7 @@ internal static class ReleaseCommands
         yield return PolicyUpdateCommand();
     }
 
-    private static string DefaultKeyDir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "VMPLauncher", "publisher");
+    internal static string DefaultKeyDir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "VMPLauncher", "publisher");
 
     private static Command PublishConfigCommand()
     {
@@ -243,7 +243,7 @@ internal static class ReleaseCommands
         return r.Ok ? 0 : 3;
     }
 
-    private static string? ResolvePassphrase(string keyDir, string keyId)
+    internal static string? ResolvePassphrase(string keyDir, string keyId)
     {
         var fromEnv = Environment.GetEnvironmentVariable("VMPL_KEY_PASSPHRASE");
         if (!string.IsNullOrEmpty(fromEnv))

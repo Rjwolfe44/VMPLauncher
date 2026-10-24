@@ -44,7 +44,7 @@ public sealed partial class ModsViewModel : ObservableObject
     private bool _loadedOnce;
 
     public ModsViewModel(SetupService setups, ModManagerService mods, ModInfoService info, LauncherService launcher, OperationRunner runner,
-        IContentDialogService dialogs, AppSettingsStore settings, ILogger<ModsViewModel> log)
+        IContentDialogService dialogs, AppSettingsStore settings, StartupOptions startup, ILogger<ModsViewModel> log)
     {
         _setups = setups;
         _mods = mods;
@@ -55,6 +55,7 @@ public sealed partial class ModsViewModel : ObservableObject
         _settings = settings;
         _log = log;
         _filter = Filters[0];
+        _tab = startup.ModsTab is "installed" or "updates" or "vlad" ? startup.ModsTab : "browse";
         _sort = Sorts[0];
         _debounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(160) };
         _debounce.Tick += (_, _) =>
@@ -114,10 +115,21 @@ public sealed partial class ModsViewModel : ObservableObject
     [ObservableProperty] private SetupInfo? _selectedSetup;
     [ObservableProperty] private IReadOnlyList<ModRowViewModel> _visibleRows = Array.Empty<ModRowViewModel>();
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsBrowseTab))]
-    private string _tab = "browse"; // browse | installed | updates
+    [NotifyPropertyChangedFor(nameof(IsBrowseTab), nameof(IsVladTab), nameof(ShowVladProblem), nameof(ShowEmptyText))]
+    private string _tab = "browse"; // browse | installed | updates | vlad
 
     public bool IsBrowseTab => Tab == "browse";
+    public bool IsVladTab => Tab == "vlad";
+
+    // Vlad's mods: the hero banner on the tab, and the tab's count.
+    [ObservableProperty] private int _vladCount;
+    [ObservableProperty] private string _vladTitle = "Vlad's mods";
+    [ObservableProperty] private string _vladTagline = "Everything Vlad builds for KSP.";
+    [ObservableProperty] private string _vladSigned = string.Empty;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowVladProblem))]
+    private string _vladProblem = string.Empty;
+    public bool ShowVladProblem => IsVladTab && VladProblem.Length > 0;
     [ObservableProperty] private string _search = string.Empty;
     [ObservableProperty] private FilterOption _filter;
     [ObservableProperty] private SortOption _sort;
@@ -127,7 +139,10 @@ public sealed partial class ModsViewModel : ObservableObject
     [ObservableProperty] private bool _isRefreshing;
     [ObservableProperty] private string _catalogLine = string.Empty;
     [ObservableProperty] private string _countLine = string.Empty;
-    [ObservableProperty] private bool _isEmpty;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowEmptyText))]
+    private bool _isEmpty;
+    public bool ShowEmptyText => IsEmpty && !IsVladTab;
     [ObservableProperty] private bool _isReadOnly;
     [ObservableProperty] private string _readOnlyReason = string.Empty;
     [ObservableProperty] private int _installedCount;
@@ -366,6 +381,7 @@ public sealed partial class ModsViewModel : ObservableObject
         }
         InstalledCount = snapshot.Entries.Count(e => e.IsInstalled || e.IsAutodetected);
         UpdateCount = snapshot.Entries.Count(e => e.HasUpdate);
+        UpdateVladInfo(snapshot);
         var tag = Tag;
         Tags.Clear();
         Tags.Add(AllTags);
@@ -381,6 +397,20 @@ public sealed partial class ModsViewModel : ObservableObject
         {
             OpenDetails(current);
         }
+    }
+
+    /// <summary>The "Vlad's mods" tab: its count, the hero banner's words, and why it is empty when it is.</summary>
+    private void UpdateVladInfo(CatalogSnapshot snapshot)
+    {
+        VladCount = snapshot.Entries.Count(e => e.IsVlad);
+        var lib = _mods.Library;
+        VladTitle = lib?.Name is { Length: > 0 } name ? name : "Vlad's mods";
+        VladTagline = lib?.Tagline is { Length: > 0 } tagline ? tagline : "Everything Vlad builds for KSP.";
+        VladSigned = lib is null
+            ? string.Empty
+            : $"Signed by Vlad  ·  key {lib.KeyId}  ·  list {lib.Sequence}  ·  published {Format.Ago(lib.IssuedAt)}" + (lib.FromCache ? "  ·  saved copy" : string.Empty);
+        VladProblem = VladCount > 0 ? string.Empty
+            : _mods.LibraryProblem ?? (lib is null ? "Vlad's mods will appear here as soon as the list has loaded." : "None of Vlad's mods are listed yet.");
     }
 
     private static bool Valid(CatalogEntry e, ChangeAction a) => a switch
@@ -400,6 +430,7 @@ public sealed partial class ModsViewModel : ObservableObject
         {
             "installed" => CatalogFilter.Installed,
             "updates" => CatalogFilter.Updates,
+            "vlad" => CatalogFilter.Vlad,
             _ => Filter.Value,
         };
         var list = _index.Query(Search, filter, Tag == AllTags ? null : Tag, Sort.Value);

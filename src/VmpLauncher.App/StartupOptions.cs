@@ -5,9 +5,10 @@ namespace VmpLauncher.App;
 /// <c>--data-dir &lt;path&gt;</c> (isolated launcher state, used by tests and the clean-profile proof),
 /// <c>--no-backdrop</c> (force the solid fallback instead of Mica),
 /// <c>--background</c> (dev screenshots: open without taking focus, on a secondary monitor when there is one),
+/// <c>--tab browse|installed|updates|vlad</c> (dev screenshots: the Mods page opens on that tab),
 /// and a single positional activation argument: a <c>vmpack://</c> URL or a <c>*.vmpack</c> file path.
 /// </summary>
-public sealed record StartupOptions(string? DataDir, bool NoBackdrop, string? Activation, string? StartPage = null, bool Background = false)
+public sealed record StartupOptions(string? DataDir, bool NoBackdrop, string? Activation, string? StartPage = null, bool Background = false, string? ModsTab = null)
 {
     public static StartupOptions Parse(string[] args)
     {
@@ -16,6 +17,7 @@ public sealed record StartupOptions(string? DataDir, bool NoBackdrop, string? Ac
         string? activation = null;
         string? page = null;
         var background = false;
+        string? modsTab = null;
         for (var i = 0; i < args.Length; i++)
         {
             switch (args[i])
@@ -25,6 +27,9 @@ public sealed record StartupOptions(string? DataDir, bool NoBackdrop, string? Ac
                     break;
                 case "--page" when i + 1 < args.Length:
                     page = args[++i];
+                    break;
+                case "--tab" when i + 1 < args.Length:
+                    modsTab = args[++i];
                     break;
                 case "--no-backdrop":
                     noBackdrop = true;
@@ -40,6 +45,6 @@ public sealed record StartupOptions(string? DataDir, bool NoBackdrop, string? Ac
                     break;
             }
         }
-        return new StartupOptions(dataDir, noBackdrop, activation, page, background);
+        return new StartupOptions(dataDir, noBackdrop, activation, page, background, modsTab);
     }
 }

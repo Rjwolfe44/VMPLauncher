@@ -21,19 +21,57 @@ public sealed class ModManagerService
     private readonly OperationRunner _runner;
     private readonly ILogger<ModManagerService> _log;
     private readonly AppSettingsStore _settings;
+    private readonly LibraryService _library;
     private readonly ConcurrentDictionary<string, Task<ModDetails>> _details = new(StringComparer.Ordinal);
     private CatalogService? _catalog;
     private Task<CatalogUpdateOutcome>? _updating;
 
-    public ModManagerService(LauncherPaths paths, CkanWorker worker, LauncherService launcher, OperationRunner runner, AppSettingsStore settings, ILogger<ModManagerService> log)
+    public ModManagerService(LauncherPaths paths, CkanWorker worker, LauncherService launcher, OperationRunner runner, AppSettingsStore settings, LibraryService library, ILogger<ModManagerService> log)
     {
         _paths = paths;
         _worker = worker;
         _launcher = launcher;
         _runner = runner;
         _settings = settings;
+        _library = library;
         _log = log;
         Changed += () => _details.Clear();
+    }
+
+    /// <summary>The verified library behind the "Vlad's mods" tab, or null when there is none.</summary>
+    public LibraryStatus? Library => _library.Status();
+
+    /// <summary>Why the tab has nothing to show, when it doesn't.</summary>
+    public string? LibraryProblem => _library.Problem;
+
+    /// <summary>
+    /// Brings Vlad's library up to date and into the catalog. Never throws: a library that is missing, offline or refused only
+    /// leaves the tab empty (with the reason), and the rest of the Mods page works as before.
+    /// </summary>
+    public async Task EnsureLibraryAsync(bool force, CancellationToken ct)
+    {
+        try
+        {
+            var result = await _library.GetAsync(force, ct).ConfigureAwait(false);
+            var outcome = await OnCatalog(c => c.UseLibrary(result is null ? null : LibraryService.ToCatalogLibrary(result), ct), ct).ConfigureAwait(false);
+            foreach (var s in outcome.Skipped)
+            {
+                _log.LogWarning("Vlad's mods: skipped {Entry}", s);
+            }
+            if (outcome.Changed)
+            {
+                _log.LogInformation("Vlad's mods: {Mods} mod(s) in the catalog", outcome.Mods);
+                Changed?.Invoke();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            _log.LogWarning(ex, "Vlad's mods could not be loaded into the catalog");
+        }
     }
 
     /// <summary>Raised (on any thread) after the catalog was refreshed or a setup's mods changed.</summary>
@@ -59,6 +97,7 @@ public sealed class ModManagerService
                 return 0;
             }, CancellationToken.None).ConfigureAwait(false);
             _log.LogInformation("Mod catalog warmed up in {Seconds:F1} s", sw.Elapsed.TotalSeconds);
+            await EnsureLibraryAsync(false, CancellationToken.None).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -93,6 +132,7 @@ public sealed class ModManagerService
         {
             var outcome = await OnCatalog(c => c.Update(force, progress, ct), ct).ConfigureAwait(false);
             _log.LogInformation("Catalog refresh: {Changed}, {Mods} mods, {New} new, {Seconds:F1} s", outcome.Changed ? "updated" : "unchanged", outcome.Mods, outcome.NewMods, outcome.Elapsed.TotalSeconds);
+            await EnsureLibraryAsync(force, ct).ConfigureAwait(false);
             Changed?.Invoke();
             return outcome;
         }
@@ -126,8 +166,11 @@ public sealed class ModManagerService
         return new CatalogTarget(setup.GameDir, setup.Name, pins, lockDoc?.Game.KspVersion);
     }
 
-    public Task<CatalogSnapshot> SnapshotAsync(SetupInfo setup, CancellationToken ct)
-        => OnCatalog(c => c.Build(TargetFor(setup)), ct);
+    public async Task<CatalogSnapshot> SnapshotAsync(SetupInfo setup, CancellationToken ct)
+    {
+        await EnsureLibraryAsync(false, ct).ConfigureAwait(false);
+        return await OnCatalog(c => c.Build(TargetFor(setup)), ct).ConfigureAwait(false);
+    }
 
     /// <summary>A mod's details; remembered until the catalog or the setup's mods change.</summary>
     public Task<ModDetails> DetailsAsync(SetupInfo setup, string identifier, CancellationToken ct)

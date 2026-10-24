@@ -200,6 +200,108 @@ public partial class HostViewModel : ObservableObject
         }
     }
 
+    // ---- Vlad's mods (the library behind the Mods page's "Vlad's mods" tab) ----
+
+    public bool HasLibraryDefinition => _host.LibraryDefinitionFile is not null;
+
+    [ObservableProperty] private bool _libraryHasPlan;
+    [ObservableProperty] private string _libraryHeadline = string.Empty;
+    [ObservableProperty] private string _libraryDetail = string.Empty;
+    [ObservableProperty] private string _libraryKind = "neutral";
+    [ObservableProperty] private string _libraryConfirm = string.Empty;
+    [ObservableProperty] private bool _canPublishLibrary;
+
+    partial void OnLibraryConfirmChanged(string value) => UpdateCanPublishLibrary();
+
+    private void UpdateCanPublishLibrary() => CanPublishLibrary = LibraryHasPlan && LibraryKind != "error" && !IsWorking && LibraryConfirm.Trim() == "PUBLISH";
+
+    [RelayCommand]
+    private Task CheckLibraryAsync() => RunLibraryAsync(execute: false);
+
+    [RelayCommand]
+    private Task PublishLibraryAsync() => RunLibraryAsync(execute: true);
+
+    private async Task RunLibraryAsync(bool execute)
+    {
+        Error = null;
+        Log.Clear();
+        IsWorking = true;
+        if (!execute)
+        {
+            LibraryHasPlan = false;
+        }
+        UpdateCanPublishLibrary();
+        var dispatcher = Application.Current.Dispatcher;
+        void OnLine(string line)
+        {
+            _runner.Report(line, null);
+            dispatcher.BeginInvoke(() => Log.Add(line));
+        }
+        try
+        {
+            var report = await _runner.RunAsync(OperationKind.Publish, execute ? "Publishing Vlad's mods" : "Checking Vlad's mods", (_, ct) => _host.PublishLibraryAsync(execute, OnLine, ct));
+            var mods = string.Join(", ", report.Modules.Select(m => $"{m.Identifier} {CatalogFormatVersion(m.Version)}"));
+            if (report.Unchanged)
+            {
+                LibraryHeadline = "Nothing new to publish";
+                LibraryDetail = $"The published library (list {report.Sequence}) already matches: {mods}.";
+                LibraryKind = "ok";
+                LibraryHasPlan = false;
+            }
+            else if (execute)
+            {
+                LibraryHeadline = $"Published Vlad's mods (list {report.Sequence})";
+                LibraryDetail = $"{mods}. Commit {report.PushedCommit?[..Math.Min(8, report.PushedCommit.Length)]}.";
+                LibraryKind = "ok";
+                LibraryConfirm = string.Empty;
+                LibraryHasPlan = false;
+                if (report.Remote is { } remote)
+                {
+                    foreach (var l in remote.Lines)
+                    {
+                        OnLine("  " + l);
+                    }
+                    foreach (var p in remote.Problems)
+                    {
+                        OnLine("  PROBLEM: " + p);
+                    }
+                    if (remote.Problems.Count > 0)
+                    {
+                        LibraryKind = "warn";
+                        LibraryDetail += $" The remote check found {remote.Problems.Count} problem(s); see the log.";
+                    }
+                }
+            }
+            else
+            {
+                LibraryHeadline = $"Ready to publish Vlad's mods (list {report.Sequence})";
+                LibraryDetail = $"{mods}. Nothing has left this PC yet.";
+                LibraryKind = report.Warnings.Count > 0 ? "warn" : "ok";
+                LibraryHasPlan = true;
+                foreach (var w in report.Warnings)
+                {
+                    OnLine("warning: " + w);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _log.LogError(ex, "Library {Mode} failed", execute ? "publish" : "check");
+            Error = ErrorCatalog.From(ex);
+            LibraryHeadline = execute ? "Publishing Vlad's mods stopped" : "The check found a problem";
+            LibraryDetail = ex.Message;
+            LibraryKind = "error";
+            LibraryHasPlan = false;
+        }
+        finally
+        {
+            IsWorking = false;
+            UpdateCanPublishLibrary();
+        }
+    }
+
+    private static string CatalogFormatVersion(string version) => VmpLauncher.Core.Catalog.CatalogFormat.DisplayVersion(version);
+
     [RelayCommand]
     private async Task SaveTokenAsync()
     {

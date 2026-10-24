@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.4.0
+
+Vlad's mod library.
+
+- **Vlad's mods.** A new tab on the Mods page with the KSP mods Vlad makes, with a banner, a short pitch and the main
+  features of each one. They also show up in normal Mods search next to everything else (with a "Vlad" badge) and install
+  like any other mod: dependencies, conflicts and the review step all work the same.
+- **Signed and checked.** The list of Vlad's mods is signed with Vlad's publisher key, which is built into the launcher.
+  The launcher refuses a list that is unsigned, altered, older than the one it already trusts, or that points a download
+  anywhere except a release in Vlad's own GitHub repositories. Every download is also checked against its SHA-256 before
+  it is installed, and a library mod can never replace a mod from the standard CKAN catalog. The last good list is kept, so
+  the tab works offline.
+- Host: Host tools has a "Publish Vlad's mods" card (check first, then type PUBLISH), and `vmpl library publish` does the
+  same from a terminal (`--execute` to publish; `vmpl library verify-remote` shows what friends will get).
+
 ## 0.3.3
 
 Your own servers on the Play page.

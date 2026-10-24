@@ -135,6 +135,30 @@ public sealed class HostToolsService
         }, ct).ConfigureAwait(false);
     }
 
+    /// <summary>The library definition (<c>library\vlad.library.json</c>) next to the pack definition, or null when there is none.</summary>
+    public string? LibraryDefinitionFile => Config?.PackFile is { } packFile ? VmpLauncher.Publishing.Library.LibraryDefinition.FindNextTo(packFile) : null;
+
+    /// <summary>Builds and signs Vlad's mod library (dry run, or for real), streaming log lines to <paramref name="onLine"/>.</summary>
+    public async Task<VmpLauncher.Publishing.Library.LibraryPublisher.Report> PublishLibraryAsync(bool execute, Action<string> onLine, CancellationToken ct)
+    {
+        var cfg = Config ?? throw new LauncherException(ErrorCode.InvalidPack, "No publish configuration on this PC.", RecoveryHint.None);
+        var definition = LibraryDefinitionFile ?? throw new LauncherException(ErrorCode.InvalidPack, "No library definition (library\\vlad.library.json) next to the pack definition.", RecoveryHint.None);
+        if (!OperatingSystem.IsWindows())
+        {
+            throw new PlatformNotSupportedException();
+        }
+        var pass = Environment.GetEnvironmentVariable("VMPL_KEY_PASSPHRASE") ?? PassphraseStore.TryLoad(cfg.KeyDir ?? KeyDir, cfg.KeyId)
+                   ?? throw new LauncherException(ErrorCode.InvalidPack, "The publisher key passphrase is not stored on this PC. Use vmpl library publish from a terminal.", RecoveryHint.None);
+        var writer = new LineWriter(onLine);
+        return await Task.Run(() =>
+        {
+            using var key = PublisherKey.LoadEncrypted(KeyFile, pass);
+            using var worker = new CkanWorker();
+            var options = new VmpLauncher.Publishing.Library.LibraryPublisher.Options(cfg, definition, execute, AllowDirty: false);
+            return worker.Run(() => new VmpLauncher.Publishing.Library.LibraryPublisher(writer).Run(options, key, ct));
+        }, ct).ConfigureAwait(false);
+    }
+
     public async Task<RemoteVerifier.Result> VerifyRemoteAsync(string expectedVersion, CancellationToken ct)
     {
         var cfg = Config ?? throw new InvalidOperationException("no config");

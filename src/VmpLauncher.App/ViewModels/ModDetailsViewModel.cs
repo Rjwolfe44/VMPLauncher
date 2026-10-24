@@ -90,6 +90,11 @@ public sealed partial class ModDetailsViewModel : ObservableObject
     public ModRowViewModel Row { get; }
     public CatalogEntry Entry => Row.Entry;
 
+    /// <summary>A mod from Vlad's library: the page shows who made it, that it was signed, and what makes it worth installing.</summary>
+    public bool IsVlad => Entry.IsVlad;
+    public string VladTagline => Entry.Vlad?.Tagline ?? string.Empty;
+    public IReadOnlyList<string> VladHighlights => Entry.Vlad?.Highlights ?? Array.Empty<string>();
+
     [ObservableProperty] private bool _isLoading = true;
     [ObservableProperty] private ImageSource? _header;
     [ObservableProperty] private string _stats = string.Empty;
@@ -119,6 +124,10 @@ public sealed partial class ModDetailsViewModel : ObservableObject
         AddLink("Forum", e.Forum);
         AddLink("Report a bug", e.BugTracker);
 
+        if (e.Vlad?.Banner is { } banner)
+        {
+            _ = LoadHeaderAsync(banner);
+        }
         var infoTask = _info.GetAsync(e);
         ModDetails? ckan = null;
         try

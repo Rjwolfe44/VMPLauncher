@@ -37,7 +37,28 @@ public sealed record CatalogEntry
     public bool IsInPack { get; init; }
     /// <summary>Appeared in the last catalog refresh.</summary>
     public bool IsNew { get; init; }
+    /// <summary>Set for the mods in Vlad's library: how the "Vlad's mods" tab presents them.</summary>
+    public VladShowcase? Vlad { get; init; }
+    public bool IsVlad => Vlad is not null;
 }
+
+/// <summary>How the "Vlad's mods" tab presents one library mod beyond its CKAN metadata.</summary>
+public sealed record VladShowcase(string Tagline, IReadOnlyList<string> Highlights, string Accent, int Order, Uri? Banner);
+
+/// <summary>One verified release of a library mod: its CKAN module document exactly as signed.</summary>
+public sealed record VladLibraryModule(string Identifier, string Version, string Json);
+
+/// <summary>
+/// Vlad's mod library as the catalog sees it, after the launcher verified its signature. The catalog turns the modules
+/// into a second CKAN repository next to the standard one.
+/// </summary>
+public sealed record VladLibrary(
+    string Name,
+    string Tagline,
+    long Sequence,
+    DateTimeOffset IssuedAt,
+    IReadOnlyList<VladLibraryModule> Modules,
+    IReadOnlyDictionary<string, VladShowcase> Showcase);
 
 /// <summary>The whole catalog for one setup.</summary>
 public sealed record CatalogSnapshot(

@@ -13,6 +13,8 @@ public enum CatalogFilter
     New,
     Incompatible,
     Cached,
+    /// <summary>Only the mods in Vlad's library.</summary>
+    Vlad,
 }
 
 public enum CatalogSort
@@ -67,6 +69,7 @@ public sealed class CatalogIndex
         CatalogFilter.New => e.IsNew,
         CatalogFilter.Incompatible => !e.IsCompatible && !e.IsInstalled,
         CatalogFilter.Cached => e.IsCached,
+        CatalogFilter.Vlad => e.IsVlad,
         _ => true,
     };
 

@@ -99,6 +99,35 @@
                         </StackPanel>
                     </Border>
 
+                    <!-- Vlad's mods -->
+                    <Border Style="{StaticResource Space.Card}" Margin="0,16,0,0" Visibility="{Binding HasLibraryDefinition, Converter={StaticResource BoolToVisibility}}">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource Space.SectionTitle}" Text="Publish Vlad's mods" />
+                            <TextBlock Style="{StaticResource Space.Style.Secondary}" TextWrapping="Wrap"
+                                       Text="The signed list behind the Mods page's Vlad's mods tab. Check first: nothing leaves this PC until you type PUBLISH." />
+                            <ui:Button Margin="0,12,0,0" Content="Check Vlad's mods" Command="{Binding CheckLibraryCommand}" Appearance="Primary" Icon="{ui:SymbolIcon Search24}"
+                                       IsEnabled="{Binding IsWorking, Converter={StaticResource InvertBool}}" HorizontalAlignment="Left" />
+                            <Border Margin="0,12,0,0" Padding="14,10" CornerRadius="10" Background="{StaticResource Space.Bg.ElevatedBrush}" Visibility="{Binding LibraryHeadline, Converter={StaticResource NullToVisibility}}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource Space.Style.Body}" FontWeight="SemiBold" Text="{Binding LibraryHeadline}" TextWrapping="Wrap"
+                                               Foreground="{Binding LibraryKind, Converter={StaticResource StatusKindToBrush}}" />
+                                    <TextBlock Style="{StaticResource Space.Style.Caption}" Text="{Binding LibraryDetail}" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                </StackPanel>
+                            </Border>
+                            <StackPanel Margin="0,14,0,0" Visibility="{Binding LibraryHasPlan, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Style="{StaticResource Space.Style.Caption}" Text="Type PUBLISH to confirm. This is public: friends' launchers pick it up." />
+                                <Grid Margin="0,6,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="160" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <ui:TextBox Text="{Binding LibraryConfirm, UpdateSourceTrigger=PropertyChanged}" PlaceholderText="PUBLISH" FontFamily="{StaticResource Space.Font.Mono}" AutomationProperties.Name="Confirm publishing Vlad's mods" />
+                                    <ui:Button Grid.Column="1" Content="Publish" Command="{Binding PublishLibraryCommand}" IsEnabled="{Binding CanPublishLibrary}" Appearance="Danger" Icon="{ui:SymbolIcon CloudArrowUp24}" Margin="8,0,0,0" />
+                                </Grid>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
                     <Border Style="{StaticResource Space.Card}" Margin="0,16,0,0" Padding="22,18,10,12">
                         <DockPanel>
                             <DockPanel DockPanel.Dock="Top" Margin="0,0,12,8">

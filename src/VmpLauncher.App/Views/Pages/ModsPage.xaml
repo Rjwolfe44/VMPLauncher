@@ -176,6 +176,12 @@
                 <RadioButton Style="{StaticResource TabChip}" GroupName="modsTab" Command="{Binding SetTabCommand}" CommandParameter="updates">
                     <TextBlock><Run Text="Updates " /><Run Text="{Binding UpdateCount, Mode=OneWay}" Foreground="{StaticResource Space.AccentBrush}" /></TextBlock>
                 </RadioButton>
+                <RadioButton Style="{StaticResource TabChip}" GroupName="modsTab" Command="{Binding SetTabCommand}" CommandParameter="vlad" AutomationProperties.Name="Vlad's mods">
+                    <StackPanel Orientation="Horizontal">
+                        <ui:SymbolIcon Symbol="Star24" Filled="True" FontSize="14" Foreground="{StaticResource Space.AccentBrush}" Margin="0,0,7,0" VerticalAlignment="Center" />
+                        <TextBlock><Run Text="Vlad's mods " /><Run Text="{Binding VladCount, Mode=OneWay}" Foreground="{StaticResource Space.AccentBrush}" /></TextBlock>
+                    </StackPanel>
+                </RadioButton>
             </StackPanel>
             <WrapPanel Grid.Row="1" Grid.Column="1" HorizontalAlignment="Right" Margin="0,10,0,0">
                 <ComboBox ItemsSource="{Binding Filters}" SelectedItem="{Binding Filter}" DisplayMemberPath="Label" Width="150" Margin="0,0,8,0" AutomationProperties.Name="Show"
@@ -192,6 +198,45 @@
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <Border Style="{StaticResource Space.Card}" Padding="6,6,4,6">
+              <DockPanel>
+                <!-- Vlad's mods: the hero banner (only on that tab) -->
+                <Border DockPanel.Dock="Top" Margin="6,6,6,10" CornerRadius="14" Padding="26,22" ClipToBounds="True"
+                        Visibility="{Binding IsVladTab, Converter={StaticResource BoolToVisibility}}" AutomationProperties.Name="Vlad's mods banner">
+                    <Border.Background>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                            <GradientStop Color="#3B2A9E" Offset="0" />
+                            <GradientStop Color="#1B1650" Offset="0.55" />
+                            <GradientStop Color="#0B1030" Offset="1" />
+                        </LinearGradientBrush>
+                    </Border.Background>
+                    <Grid>
+                        <Canvas HorizontalAlignment="Right" VerticalAlignment="Center" Width="300" Height="140" IsHitTestVisible="False">
+                            <Ellipse Width="330" Height="120" Canvas.Left="0" Canvas.Top="10" Stroke="#664FE3FF" StrokeThickness="1.6">
+                                <Ellipse.RenderTransform>
+                                    <RotateTransform Angle="-20" CenterX="165" CenterY="60" />
+                                </Ellipse.RenderTransform>
+                            </Ellipse>
+                            <Ellipse Width="250" Height="90" Canvas.Left="40" Canvas.Top="25" Stroke="#33B69CFF" StrokeThickness="1.2">
+                                <Ellipse.RenderTransform>
+                                    <RotateTransform Angle="-20" CenterX="125" CenterY="45" />
+                                </Ellipse.RenderTransform>
+                            </Ellipse>
+                            <Ellipse Width="10" Height="10" Fill="White" Canvas.Left="248" Canvas.Top="30" Opacity="0.95" />
+                            <Ellipse Width="5" Height="5" Fill="#B69CFF" Canvas.Left="62" Canvas.Top="104" Opacity="0.8" />
+                        </Canvas>
+                        <StackPanel HorizontalAlignment="Left" MaxWidth="560">
+                            <Border CornerRadius="10" Padding="10,3" HorizontalAlignment="Left" Background="#337C5CFF" BorderBrush="#887C5CFF" BorderThickness="1">
+                                <TextBlock Text="MADE BY VLAD" FontSize="11" FontWeight="SemiBold" Foreground="#DCD2FF" />
+                            </Border>
+                            <TextBlock Text="{Binding VladTitle}" FontSize="34" FontWeight="SemiBold" Foreground="White" Margin="0,10,0,0" />
+                            <TextBlock Text="{Binding VladTagline}" FontSize="15" Foreground="#DDE2E6FF" TextWrapping="Wrap" Margin="0,4,0,0" />
+                            <StackPanel Orientation="Horizontal" Margin="0,14,0,0" Visibility="{Binding VladSigned, Converter={StaticResource NullToVisibility}}">
+                                <ui:SymbolIcon Symbol="ShieldCheckmark24" Filled="True" FontSize="16" Foreground="#4ADE9F" Margin="0,0,8,0" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding VladSigned}" FontSize="12" Foreground="#BFC6FF" VerticalAlignment="Center" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Grid>
+                </Border>
                 <Grid>
                     <ListBox x:Name="ModList" ItemsSource="{Binding VisibleRows}" SelectedItem="{Binding SelectedRow}" Background="Transparent" BorderThickness="0"
                              VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling" VirtualizingPanel.ScrollUnit="Pixel"
@@ -259,6 +304,13 @@
                                     </StackPanel>
                                     <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,0">
                                         <Border Style="{StaticResource Space.Badge}" Background="{StaticResource Space.Accent.SoftBrush}" BorderBrush="{StaticResource Space.AccentBrush}" Margin="0,0,6,0"
+                                                Visibility="{Binding IsVlad, Converter={StaticResource BoolToVisibility}}" ToolTip="Made by Vlad. Signed and checked on your PC.">
+                                            <StackPanel Orientation="Horizontal">
+                                                <ui:SymbolIcon Symbol="ShieldCheckmark16" Filled="True" FontSize="12" Foreground="{StaticResource Space.AccentBrush}" Margin="0,0,4,0" VerticalAlignment="Center" />
+                                                <TextBlock Style="{StaticResource Space.Style.Caption}" Text="Vlad" Foreground="{StaticResource Space.Text.PrimaryBrush}" />
+                                            </StackPanel>
+                                        </Border>
+                                        <Border Style="{StaticResource Space.Badge}" Background="{StaticResource Space.Accent.SoftBrush}" BorderBrush="{StaticResource Space.AccentBrush}" Margin="0,0,6,0"
                                                 Visibility="{Binding PendingLabel, Converter={StaticResource NullToVisibility}}">
                                             <TextBlock Style="{StaticResource Space.Style.Caption}" Text="{Binding PendingLabel}" Foreground="{StaticResource Space.Text.PrimaryBrush}" />
                                         </Border>
@@ -275,7 +327,9 @@
                         </ListBox.ItemTemplate>
                     </ListBox>
                     <TextBlock Style="{StaticResource Space.Style.Secondary}" Text="No mods match. Try other words, or show Everything." Margin="18" HorizontalAlignment="Center"
-                               Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}" />
+                               Visibility="{Binding ShowEmptyText, Converter={StaticResource BoolToVisibility}}" />
+                    <TextBlock Style="{StaticResource Space.Style.Secondary}" Text="{Binding VladProblem}" Margin="18" HorizontalAlignment="Center" TextWrapping="Wrap" MaxWidth="520" TextAlignment="Center"
+                               Visibility="{Binding ShowVladProblem, Converter={StaticResource BoolToVisibility}}" />
                     <Border Background="{StaticResource Space.Bg.LayerBrush}" CornerRadius="{StaticResource Space.Radius.Card}" Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibility}}">
                         <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                             <ui:ProgressRing IsIndeterminate="True" Width="40" Height="40" />
@@ -283,6 +337,7 @@
                         </StackPanel>
                     </Border>
                 </Grid>
+              </DockPanel>
             </Border>
 
             <!-- Mod page -->
@@ -313,6 +368,27 @@
                             </StackPanel>
                         </Grid>
                         <StackPanel Margin="22,14,22,22">
+                            <Border CornerRadius="12" Padding="14,12" Margin="0,0,0,14" Background="{StaticResource Space.Accent.SoftBrush}" BorderBrush="{StaticResource Space.AccentBrush}" BorderThickness="1"
+                                    Visibility="{Binding IsVlad, Converter={StaticResource BoolToVisibility}}">
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <ui:SymbolIcon Symbol="ShieldCheckmark24" Filled="True" FontSize="18" Foreground="{StaticResource Space.Status.OnlineBrush}" Margin="0,0,8,0" VerticalAlignment="Center" />
+                                        <TextBlock Style="{StaticResource Space.Style.Body}" FontWeight="SemiBold" Text="Made by Vlad. Signed and checked on your PC." VerticalAlignment="Center" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding VladTagline}" FontSize="16" FontWeight="SemiBold" Margin="0,10,0,0" TextWrapping="Wrap" Foreground="{StaticResource Space.Text.PrimaryBrush}"
+                                               Visibility="{Binding VladTagline, Converter={StaticResource NullToVisibility}}" />
+                                    <ItemsControl ItemsSource="{Binding VladHighlights}" Margin="0,6,0,0">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
+                                                    <TextBlock Text="✓" Foreground="{StaticResource Space.Status.OnlineBrush}" Margin="0,0,8,0" VerticalAlignment="Top" />
+                                                    <TextBlock Text="{Binding}" TextWrapping="Wrap" MaxWidth="360" Foreground="{StaticResource Space.Text.PrimaryBrush}" FontSize="13" />
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </Border>
                             <TextBlock Style="{StaticResource Space.Style.Body}" Text="{Binding Entry.Abstract}" TextWrapping="Wrap" />
                             <TextBlock Style="{StaticResource Space.Style.Caption}" Text="{Binding Stats}" TextWrapping="Wrap" Margin="0,8,0,0" />
                             <TextBlock Style="{StaticResource Space.Style.Caption}" Text="{Binding Followers}" Margin="0,2,0,0" Visibility="{Binding Followers, Converter={StaticResource NullToVisibility}}" />

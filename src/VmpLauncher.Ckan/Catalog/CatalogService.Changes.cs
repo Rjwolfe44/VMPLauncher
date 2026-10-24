@@ -260,6 +260,7 @@ public sealed partial class CatalogService
             {
                 manager.registry.RepositoriesSet(new SortedDictionary<string, Repository> { [DefaultRepo.name] = DefaultRepo });
             }
+            AddLibrary(manager.registry);
             manager.ScanUnmanagedFiles();
             var ctx = new Context(manager.registry, instance, instance.VersionCriteria(), instance.StabilityToleranceConfig, false, null);
             var c = Compose(ctx, req);
@@ -332,6 +333,7 @@ public sealed partial class CatalogService
         }
         finally
         {
+            StripLibrary(manager);
             RegistryManager.DisposeInstance(instance);
             _lastContext = null;
         }

@@ -195,7 +195,7 @@ public sealed partial class CatalogService : IDisposable
             var crit = inst?.VersionCriteria()
                        ?? new GameVersionCriteria(GameVersion.TryParse(target.PackGameVersion, out var v) ? v : GameVersion.Parse("1.12.5"));
             var stab = inst?.StabilityToleranceConfig ?? new StabilityToleranceConfig(Path.Combine(_paths.CkanDir, "stability_tolerance.json"));
-            return new Context(new Registry(_repoData, DefaultRepo), inst, crit, stab, true, "This setup follows a pack, so its mods match the server. Make a custom copy to change them.");
+            return new Context(new Registry(_repoData, ActiveRepos), inst, crit, stab, true, "This setup follows a pack, so its mods match the server. Make a custom copy to change them.");
         }
         var instance = TryInstance(target)
                        ?? throw new LauncherException(ErrorCode.GameNotFound, $"{target.GameDir} is not a KSP folder the launcher can read.", RecoveryHint.ChooseAnotherFolder);
@@ -208,6 +208,7 @@ public sealed partial class CatalogService : IDisposable
         {
             registry.RepositoriesSet(new SortedDictionary<string, Repository> { [DefaultRepo.name] = DefaultRepo });
         }
+        AddLibrary(registry);
         return new Context(registry, instance, instance.VersionCriteria(), instance.StabilityToleranceConfig, locked,
             locked ? "CKAN has this KSP folder open. Close CKAN to change its mods here." : null);
     }
@@ -335,6 +336,7 @@ public sealed partial class CatalogService : IDisposable
             BugTracker = res?.bugtracker,
             IsInPack = inPack,
             IsNew = _new.Contains(ident),
+            Vlad = _showcase.GetValueOrDefault(ident),
         };
     }
 

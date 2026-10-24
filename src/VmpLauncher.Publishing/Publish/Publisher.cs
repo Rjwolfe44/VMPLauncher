@@ -302,7 +302,8 @@ public sealed class Publisher
         }
     }
 
-    private void EnsureCleanRepo(PublishConfig c, List<string> warnings)
+    /// <summary>Clean tree, expected branch, not behind origin. Shared with the library publisher, which pushes to the same repository.</summary>
+    internal static void EnsureCleanRepo(PublishConfig c, List<string> warnings)
     {
         var tools = new ExternalTools(TextWriter.Null);
         var status = tools.Git(c.PacksRepoDir, "status", "--porcelain");
@@ -343,57 +344,71 @@ public sealed class Publisher
             {
                 continue;
             }
-            switch (OnlineAssetState(url, module.Artifact.Sha256, ct))
-            {
-                case AssetState.Matches:
-                    _log.WriteLine($"Release asset present and identical: {url}");
-                    continue;
-                case AssetState.Differs:
-                    throw new LauncherException(ErrorCode.InvalidPack,
-                        $"{url} already exists with different content. {src.Name ?? src.Id} was rebuilt without a new version: bump its version and publish again.", RecoveryHint.None);
-            }
-            var repo = src.Distribution.Repo ?? throw new LauncherException(ErrorCode.InvalidPack, $"{src.Id}: github-release distribution without repo.", RecoveryHint.None);
-            var tag = (src.Distribution.TagPrefix ?? string.Empty) + module.Version;
-            var title = $"{src.Name ?? src.Id} {module.Version}";
             var notes = $"Built from the host install for {lk.Pack.Name} {lk.Pack.Version}. SHA-256 {module.Artifact.Sha256}.";
-            var createArgs = new[] { "release", "create", tag, zip, "--repo", repo, "--title", title, "--notes", notes };
-            var uploadArgs = new[] { "release", "upload", tag, zip, "--repo", repo };
-            yield return new ExternalAction($"Release asset for {src.Id} {module.Version} (missing at {url})",
-                new[] { ExternalTools.Describe("gh", createArgs) + "   # or, if the tag exists:", ExternalTools.Describe("gh", uploadArgs) },
-                tools =>
-                {
-                    var view = tools.Run("gh", new[] { "release", "view", tag, "--repo", repo }, throwOnError: false);
-                    tools.Run("gh", view.Ok ? uploadArgs : createArgs);
-                    // Re-download and compare: the lock promises this exact hash. A new release's download URL can
-                    // answer 404 for more than half a minute after the upload, so keep trying for about two minutes.
-                    var tmp = Path.Combine(Path.GetTempPath(), "vmpl-asset-" + Guid.NewGuid().ToString("N") + ".zip");
-                    try
-                    {
-                        const int attempts = 13;
-                        for (var attempt = 0; attempt < attempts; attempt++)
-                        {
-                            Thread.Sleep(attempt == 0 ? 2000 : 10000);
-                            try
-                            {
-                                using var s = _http.GetStreamAsync(url, ct).GetAwaiter().GetResult();
-                                using var f = File.Create(tmp);
-                                s.CopyTo(f);
-                                break;
-                            }
-                            catch (Exception ex) when (attempt < attempts - 1 && (ex is HttpRequestException || (ex is TaskCanceledException && !ct.IsCancellationRequested))) { }
-                        }
-                        if (!File.Exists(tmp) || !Sha256Util.HexEquals(Sha256Util.HashFile(tmp), module.Artifact.Sha256))
-                        {
-                            throw new LauncherException(ErrorCode.Tampered, $"The uploaded asset at {url} does not hash to what the lock promises.", RecoveryHint.None);
-                        }
-                        _log.WriteLine($"  asset verified: {url}");
-                    }
-                    finally
-                    {
-                        if (File.Exists(tmp)) { File.Delete(tmp); }
-                    }
-                });
+            var action = PlanReleaseAsset(src.Id, src.Name ?? src.Id, module.Version, src.Distribution.Repo, src.Distribution.TagPrefix, url, module.Artifact.Sha256, zip, notes, ct);
+            if (action is not null)
+            {
+                yield return action;
+            }
         }
+    }
+
+    /// <summary>
+    /// Plans the GitHub release asset for one custom package (shared with the library publisher): null when the asset is already
+    /// online with exactly these bytes, a refusal when it is online with different bytes (rebuilt without a new version), otherwise
+    /// the upload plus the retry-until-downloadable verification. The online check is read-only, so it runs in a dry run too.
+    /// </summary>
+    internal ExternalAction? PlanReleaseAsset(string id, string displayName, string version, string? repo, string? tagPrefix, string url, string sha256, string zip, string notes, CancellationToken ct)
+    {
+        switch (OnlineAssetState(url, sha256, ct))
+        {
+            case AssetState.Matches:
+                _log.WriteLine($"Release asset present and identical: {url}");
+                return null;
+            case AssetState.Differs:
+                throw new LauncherException(ErrorCode.InvalidPack,
+                    $"{url} already exists with different content. {displayName} was rebuilt without a new version: bump its version and publish again.", RecoveryHint.None);
+        }
+        var releaseRepo = repo ?? throw new LauncherException(ErrorCode.InvalidPack, $"{id}: github-release distribution without repo.", RecoveryHint.None);
+        var tag = (tagPrefix ?? string.Empty) + version;
+        var title = $"{displayName} {version}";
+        var createArgs = new[] { "release", "create", tag, zip, "--repo", releaseRepo, "--title", title, "--notes", notes };
+        var uploadArgs = new[] { "release", "upload", tag, zip, "--repo", releaseRepo };
+        return new ExternalAction($"Release asset for {id} {version} (missing at {url})",
+            new[] { ExternalTools.Describe("gh", createArgs) + "   # or, if the tag exists:", ExternalTools.Describe("gh", uploadArgs) },
+            tools =>
+            {
+                var view = tools.Run("gh", new[] { "release", "view", tag, "--repo", releaseRepo }, throwOnError: false);
+                tools.Run("gh", view.Ok ? uploadArgs : createArgs);
+                // Re-download and compare: the lock promises this exact hash. A new release's download URL can
+                // answer 404 for more than half a minute after the upload, so keep trying for about two minutes.
+                var tmp = Path.Combine(Path.GetTempPath(), "vmpl-asset-" + Guid.NewGuid().ToString("N") + ".zip");
+                try
+                {
+                    const int attempts = 13;
+                    for (var attempt = 0; attempt < attempts; attempt++)
+                    {
+                        Thread.Sleep(attempt == 0 ? 2000 : 10000);
+                        try
+                        {
+                            using var s = _http.GetStreamAsync(url, ct).GetAwaiter().GetResult();
+                            using var f = File.Create(tmp);
+                            s.CopyTo(f);
+                            break;
+                        }
+                        catch (Exception ex) when (attempt < attempts - 1 && (ex is HttpRequestException || (ex is TaskCanceledException && !ct.IsCancellationRequested))) { }
+                    }
+                    if (!File.Exists(tmp) || !Sha256Util.HexEquals(Sha256Util.HashFile(tmp), sha256))
+                    {
+                        throw new LauncherException(ErrorCode.Tampered, $"The uploaded asset at {url} does not hash to what the lock promises.", RecoveryHint.None);
+                    }
+                    _log.WriteLine($"  asset verified: {url}");
+                }
+                finally
+                {
+                    if (File.Exists(tmp)) { File.Delete(tmp); }
+                }
+            });
     }
 
     /// <summary>Private zips that have no private repository to live in (distribution "private-sideload").</summary>

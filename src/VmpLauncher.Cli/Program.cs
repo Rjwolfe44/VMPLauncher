@@ -37,6 +37,7 @@ internal static class Program
         {
             root.Subcommands.Add(c);
         }
+        root.Subcommands.Add(Commands.LibraryCommands.Build(dataDir));
 
         return root.Parse(args).Invoke();
     }

@@ -44,10 +44,38 @@ public sealed partial class ModRowViewModel : ObservableObject
     public string Downloads => Entry.Downloads <= 0 ? string.Empty : FormatCount(Entry.Downloads);
     public string Initials => string.Concat(Entry.Name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Where(w => char.IsLetterOrDigit(w[0])).Take(2).Select(w => char.ToUpperInvariant(w[0])));
 
+    /// <summary>A mod from Vlad's library (gets the "Vlad" badge and its own accent colour).</summary>
+    public bool IsVlad => Entry.IsVlad;
+
+    private static readonly Dictionary<string, Brush> VladBrushes = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>The showcase accent as a gradient tile: deep at the corner, bright at the far side.</summary>
+    private static Brush VladBrush(string accent)
+    {
+        lock (VladBrushes)
+        {
+            if (!VladBrushes.TryGetValue(accent, out var b))
+            {
+                var c = (Color)ColorConverter.ConvertFromString(accent);
+                static byte Mix(byte a, byte to, double t) => (byte)Math.Round(a + ((to - a) * t));
+                var deep = Color.FromRgb(Mix(c.R, 0, 0.55), Mix(c.G, 0, 0.55), Mix(c.B, 0, 0.55));
+                var bright = Color.FromRgb(Mix(c.R, 255, 0.35), Mix(c.G, 255, 0.35), Mix(c.B, 255, 0.35));
+                b = new LinearGradientBrush(deep, bright, 45);
+                b.Freeze();
+                VladBrushes[accent] = b;
+            }
+            return b;
+        }
+    }
+
     public Brush PlaceholderBrush
     {
         get
         {
+            if (Entry.Vlad is { } vlad)
+            {
+                return VladBrush(vlad.Accent);
+            }
             // FNV-1a: string.GetHashCode changes every run, and a mod's colour should not.
             var h = 2166136261u;
             foreach (var c in Entry.Identifier)

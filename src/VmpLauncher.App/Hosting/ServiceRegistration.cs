@@ -32,6 +32,7 @@ public static class ServiceRegistration
         services.AddSingleton<PackUpdateService>();
         services.AddSingleton<RecoveryActions>();
         services.AddSingleton<SetupService>();
+        services.AddSingleton<LibraryService>();
         services.AddSingleton<ModManagerService>();
         services.AddSingleton<ModInfoService>();
         services.AddSingleton<UpdateService>();

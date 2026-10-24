@@ -1,0 +1,40 @@
+{
+  "schema": "vmplib/1",
+  "id": "vlad",
+  "name": "Vlad's mods",
+  "tagline": "Everything Vlad builds for KSP. Signed by Vlad, checked on your PC, one click to install.",
+  "mods": [
+    {
+      "package": {
+        "id": "VladMultiplayer",
+        "name": "Vlad Multiplayer",
+        "abstract": "Play KSP with friends: the VMP multiplayer client with career-mode sync, built for the VMP Train Career server.",
+        "license": "MIT",
+        "sourceDir": "..\\..\\VMP\\VMPMod\\Build\\Release\\Client",
+        "installAs": "GameData/VladMultiplayer",
+        "versionFrom": { "assemblyInformationalVersion": "Plugins/LmpClient.dll" },
+        "exclude": [ "Data/**", "Traces/**", "logs/**" ],
+        "conflicts": [ "LunaMultiplayer", "LunaCompat" ],
+        "distribution": { "kind": "github-release", "repo": "Rjwolfe44/VMP", "tagPrefix": "client-" }
+      },
+      "description": "VMP (Vlad Multiplayer) lets you play Kerbal Space Program with friends in one shared universe. Career mode is kept in sync between everyone on the server: funds, science and contracts.\n\nIt is a fork of Luna Multiplayer for KSP 1.12, and it is built for the VMP Train Career server.\n\nTo join a server you need the exact matching build of the client. The VMP Launcher pack installs the right one for you.",
+      "tags": [ "multiplayer", "vlad" ],
+      "resources": {
+        "homepage": "https://github.com/Rjwolfe44/VMP",
+        "repository": "https://github.com/Rjwolfe44/VMP",
+        "bugtracker": "https://github.com/Rjwolfe44/VMP/issues"
+      },
+      "depends": [ { "name": "Harmony2" } ],
+      "showcase": {
+        "tagline": "Fly together: shared career, shared sky.",
+        "highlights": [
+          "Career-mode sync for funds, science and contracts",
+          "Time warp subspaces with friends",
+          "Exact-build matching so everyone plays the same game"
+        ],
+        "accent": "#7C5CFF",
+        "order": 1
+      }
+    }
+  ]
+}
