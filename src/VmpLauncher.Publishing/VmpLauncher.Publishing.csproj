@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <RootNamespace>VmpLauncher.Publishing</RootNamespace>
+    <Description>Host-side capture, classification, export, signing.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\VmpLauncher.Core\VmpLauncher.Core.csproj" />
+    <ProjectReference Include="..\VmpLauncher.Ckan\VmpLauncher.Ckan.csproj" />
+    <ProjectReference Include="..\VmpLauncher.Game\VmpLauncher.Game.csproj" />
+    <ProjectReference Include="..\VmpLauncher.Net\VmpLauncher.Net.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="VmpLauncher.Tests" />
+    <InternalsVisibleTo Include="VmpLauncher.IntegrationTests" />
+  </ItemGroup>
+</Project>

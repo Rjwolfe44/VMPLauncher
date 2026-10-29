@@ -1,0 +1,25 @@
+<Project>
+  <!--
+    CKAN-core compiles ..\_build\meta\GlobalAssemblyVersionInfo.cs, which CKAN's own Cake build normally
+    generates from git tags. We generate it ourselves (pinned to the submodule tag) so the submodule builds
+    from a plain ProjectReference without Cake or network access. CKAN.Meta.ReleaseVersion derives from
+    AssemblyFileVersion; keeping it at the tag version keeps IsSpecSupported correct.
+  -->
+  <PropertyGroup>
+    <CkanPinnedVersion Condition="'$(CkanPinnedVersion)' == ''">1.36.4</CkanPinnedVersion>
+    <CkanRepoRoot>$(MSBuildThisFileDirectory)..\external\CKAN\</CkanRepoRoot>
+    <CkanVersionInfoFile>$(CkanRepoRoot)_build\meta\GlobalAssemblyVersionInfo.cs</CkanVersionInfoFile>
+    <CkanVersionInfoLines>
+using System.Reflection%3B
+[assembly: AssemblyVersion("$(CkanPinnedVersion.Split('.')[0]).$(CkanPinnedVersion.Split('.')[1])")]
+[assembly: AssemblyFileVersion("$(CkanPinnedVersion)")]
+[assembly: AssemblyInformationalVersion("$(CkanPinnedVersion)")]
+    </CkanVersionInfoLines>
+  </PropertyGroup>
+  <Target Name="VmpGenerateCkanVersionInfo" BeforeTargets="ResolveProjectReferences;Restore;_GenerateRestoreProjectSpec"
+          Condition="!Exists('$(CkanVersionInfoFile)')">
+    <MakeDir Directories="$(CkanRepoRoot)_build\meta" />
+    <WriteLinesToFile File="$(CkanVersionInfoFile)" Lines="$(CkanVersionInfoLines)" Overwrite="true" />
+    <Message Importance="high" Text="Generated $(CkanVersionInfoFile) for CKAN v$(CkanPinnedVersion)" />
+  </Target>
+</Project>

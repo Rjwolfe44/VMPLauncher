@@ -1,0 +1,32 @@
+# Vendored Lidgren.Network sources (see SOURCE.txt). Never edit the .cs files; silence diagnostics here.
+root = true
+
+[*.cs]
+# Treat as generated: disables the nullable context and skips analyzers for this third-party code.
+generated_code = true
+dotnet_analyzer_diagnostic.severity = none
+# Compiler warnings that still apply to generated code.
+dotnet_diagnostic.CS0618.severity = none
+dotnet_diagnostic.CS0114.severity = none
+dotnet_diagnostic.CS0162.severity = none
+dotnet_diagnostic.CS0168.severity = none
+dotnet_diagnostic.CS0169.severity = none
+dotnet_diagnostic.CS0219.severity = none
+dotnet_diagnostic.CS0414.severity = none
+dotnet_diagnostic.CS0649.severity = none
+dotnet_diagnostic.CS0672.severity = none
+dotnet_diagnostic.CS1570.severity = none
+dotnet_diagnostic.CS1572.severity = none
+dotnet_diagnostic.CS1573.severity = none
+dotnet_diagnostic.CS1574.severity = none
+dotnet_diagnostic.CS1587.severity = none
+dotnet_diagnostic.CS1591.severity = none
+dotnet_diagnostic.CS3001.severity = none
+dotnet_diagnostic.CS3002.severity = none
+dotnet_diagnostic.CS3003.severity = none
+dotnet_diagnostic.CS3021.severity = none
+dotnet_diagnostic.SYSLIB0014.severity = none
+dotnet_diagnostic.SYSLIB0021.severity = none
+dotnet_diagnostic.SYSLIB0022.severity = none
+dotnet_diagnostic.SYSLIB0023.severity = none
+dotnet_diagnostic.SYSLIB0045.severity = none

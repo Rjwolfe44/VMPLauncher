@@ -1,0 +1,204 @@
+# Changelog
+
+## 0.4.1
+
+Send my logs.
+
+- **Send my logs.** Doctor > Fix the pack copy has a new button that makes one small zip on your Desktop (named like
+  `VMP-logs-YourName-20261024-041200.zip`) and shows it in Explorer, ready to drop in Discord for the host. It holds the
+  game log (a 100 MB `KSP.log` becomes about 4 MB), Unity's `Player.log`, the launcher's recent logs, VMP's sync traces
+  if there are any, the same report as Copy report, a short `incident-extract.txt` with just the errors, crashes and
+  vessel losses from the game log, and a `README.txt` that says what is inside. Your Windows user name is replaced with
+  `<user>` everywhere, and the server password and private-mod tokens are removed. It only reads your files, works while
+  KSP is running, and still makes the zip when something is missing (it tells you what).
+
+## 0.4.0
+
+Vlad's mod library.
+
+- **Vlad's mods.** A new tab on the Mods page with the KSP mods Vlad makes, with a banner, a short pitch and the main
+  features of each one. They also show up in normal Mods search next to everything else (with a "Vlad" badge) and install
+  like any other mod: dependencies, conflicts and the review step all work the same.
+- **Signed and checked.** The list of Vlad's mods is signed with Vlad's publisher key, which is built into the launcher.
+  The launcher refuses a list that is unsigned, altered, older than the one it already trusts, or that points a download
+  anywhere except a release in Vlad's own GitHub repositories. Every download is also checked against its SHA-256 before
+  it is installed, and a library mod can never replace a mod from the standard CKAN catalog. The last good list is kept, so
+  the tab works offline.
+- Host: Host tools has a "Publish Vlad's mods" card (check first, then type PUBLISH), and `vmpl library publish` does the
+  same from a terminal (`--execute` to publish; `vmpl library verify-remote` shows what friends will get).
+
+## 0.3.3
+
+Your own servers on the Play page.
+
+- **Add your own servers.** Play > Add server saves another address for the pack's server (for example its home-network
+  address, `192.168.1.20` or `192.168.1.20:8800`). It shows next to the host's routes with a live status, can be picked,
+  edited and removed, uses the password saved on the Play page, and stays on your PC. Names and addresses are checked
+  as you type (no duplicates, no `http://`, port 1 to 65535). The VMP window in KSP gets the same list, and a removed
+  server leaves it too.
+- **The host's own LAN route shows on the host PC.** Presets the host keeps off the published list (`exportable: false`,
+  like the home-network address) now appear on the Play page of the PC that holds the publisher key, so the host
+  doesn't have to add them by hand. Friends never see them.
+
+## 0.3.2
+
+Ways out of a stuck pack copy, always one click away.
+
+- **Doctor > Fix the pack copy**: Check and repair files (puts back changed or missing files, moves DLLs the pack
+  doesn't know to the copy's quarantine folder), Restore (finishes or undoes an interrupted update), **Reinstall the pack
+  copy** (a fresh copy that keeps your saves, craft, missions, screenshots, KSP settings and mod settings), Copy report
+  and Open logs.
+- **Reinstall** is the last resort for anything Repair and Restore can't fix. It sets the old copy aside first and puts
+  it back as it was if anything fails; only then is it deleted. Private mods are fetched before anything moves, and
+  your own KSP folder is never touched.
+- **Error cards have buttons**: the fix for that error (Repair files, Restore, Reinstall, Choose KSP folder, Private
+  mods), Troubleshoot, and Copy report, a report for the host with passwords and your user name removed. Tips that
+  pointed at buttons that no longer exist are fixed.
+- **Home has a Repair button** (the wrench) whenever the pack is installed, including while an update is waiting.
+- An update that still fails after its automatic repair now offers Reinstall instead of leaving you stuck.
+- A CKAN lock file left behind by a power cut or crash no longer blocks the pack copy or a setup forever: a lock
+  nobody holds is removed by itself.
+
+## 0.3.1
+
+- Turning off Settings > Beta channel now really switches back to stable releases. Before, a launcher installed from a
+  beta kept looking for betas only, found none among the stable releases and said it was up to date. A beta newer
+  than the stable release stays installed until stable catches up (no downgrade).
+- Stable releases are now also published to the beta channel, so beta testers get them too. This release reaches
+  every launcher, including betas that were stuck with the switch off.
+- An update that stops on DLLs the pack doesn't know (an extra mod dropped into the launcher's copy) now moves them to
+  the copy's quarantine folder and tries again, like it already does for changed files.
+
+## 0.3.0
+
+The mod manager from the 0.3.0 betas is now on the stable channel, plus pack updates that need no clicks.
+
+- **Mod manager.** Browse the whole CKAN catalog (about 3,800 mods) with pictures and descriptions, make extra KSP
+  setups or manage a KSP folder you already have, install, remove and update any mod with a review before anything
+  changes, and share a setup as a code or a `.vmpack` file. The pack's own copy stays exactly as the host published
+  it. Details in the beta notes below.
+- **New packs install by themselves.** The launcher checks for a new pack before Play, when KSP closes and when you
+  come back to its window (at most every 10 minutes; a check is three small files), and installs it when KSP isn't
+  running. Before, a launcher left open installed only the first new pack by itself and then waited for a click.
+- **Updates repair themselves.** KSP redraws some part icons inside mod folders, which made the next update stop with
+  "Installed files do not match the pack". An update that finds files changed since the install now puts them back
+  from the downloads it already has and tries again.
+- Right after the host publishes, GitHub can serve the new pack files with an old signature for a few minutes. The
+  launcher now keeps the pack it has and checks again later, instead of showing a signature error.
+- An unchanged pack is no longer downloaded again on every check.
+- Host tools: publishing waits up to two minutes for GitHub to serve a newly uploaded mod file (it gave up after 27
+  seconds). Part icons (`@thumbs` folders) are treated as files KSP may rewrite.
+
+## 0.3.0-beta.3
+
+- When SpaceDock (the site mod pictures and long descriptions come from) is down, the Mods page says so instead of
+  just showing letter tiles. The launcher then checks it once a minute rather than for every row, and fills the
+  pictures in by itself as soon as SpaceDock answers again; no restart needed.
+
+## 0.3.0-beta.2
+
+- Mod pictures load much faster. SpaceDock only serves full-size pictures (about 1 MB each), so each one is now
+  downloaded once, shrunk to the size it is shown at and kept as a small file (about 3 KB for a list tile); after
+  that it loads from disk instantly. The rows on screen load first, with up to 8 downloads at once.
+- Mod pages reopen instantly, and switching between mods no longer reloads the setup's mod list from disk.
+- Once you have used the Mods page, the launcher loads the CKAN mod list in the background shortly after it starts,
+  so the page opens without the wait.
+
+## 0.3.0-beta.1
+
+First beta of the mod manager, on the beta channel only (Settings > Beta channel). Switching the channel now takes
+effect without restarting the launcher.
+
+- **Mod manager.** The Mods page now browses the whole CKAN catalog (about 3,800 mods) for any setup: search by name,
+  author or description, filters (compatible, installed, updates, new, already downloaded, not for this KSP), tags and
+  sorting, with SpaceDock pictures and descriptions on every mod's page.
+- **Setups.** Make fresh KSP copies (hard links, almost no extra space) or manage a KSP folder you already have, and
+  switch between them. Play starts KSP from any setup. The pack's copy stays browse-only so it always matches the
+  server; "Make a custom copy" starts a free one.
+- **Install, remove, update any mod.** Changes are queued and reviewed: dependencies, removals that cascade, conflicts,
+  recommended extras and "pick which mod provides X" are all shown before anything changes, and the whole change runs
+  as one CKAN transaction that rolls back on failure or cancel. "Update all" on the Updates tab.
+- **Share and import.** Share a setup as a short code or a `.vmpack` file; importing one makes a new copy with the same
+  mods at the same versions (or the newest one when a version left CKAN) and opens the review.
+- Fix: a KSP started from one copy no longer blocks changes to another copy whose game files are hard links of the
+  same install.
+- CLI: `vmpl catalog update|list|show|plan|apply|seed` for the mod manager.
+
+## 0.2.2
+
+- Your downloads, game copy and settings now live in `%LOCALAPPDATA%\VmpLauncherData`, outside the program folder.
+  Before, they shared the folder Windows Setup and uninstall replace, so reinstalling the launcher could delete them.
+  Existing data moves over by itself the first time 0.2.2 starts (same drive, so it is instant).
+- Play: "Just launch KSP (no server)" starts the game with the pack's mods without joining. Play single-player, or
+  connect later from the VMP window.
+- Home no longer cancels its own first pack check at startup.
+
+## 0.2.1
+
+- Mods you already have in a normal CKAN download cache are reused instead of downloaded again: matched by CKAN's file
+  name, checked against the pack's hash, and hard-linked (no extra disk space on the same drive). A full install on a
+  PC with CKAN's cache took 2 minutes and downloaded nothing.
+- Settings: "Your CKAN download cache" shows its size and what is shared with the launcher; "Transfer the pack's
+  mods" takes them over without copying, "Clear CKAN's cache" frees the rest (asks first, not while CKAN runs).
+- Settings: "Clean up old downloads" removes archives neither the current pack nor your install still uses.
+- Downloads show percent, speed and time left.
+- Launcher updates install by themselves when you close the launcher; no restart click needed.
+- The launcher opens on the main monitor, and Play starts KSP on the main monitor (Settings switch).
+- Host tools: the token button opens GitHub's page pre-filled; publishing no longer shows on Home.
+
+## 0.2.0
+
+### Launcher UI (rebuilt)
+- New shell: custom sidebar with a live server-status card, pack version and update pill; pages slide in; no more
+  WPF-UI NavigationView (its auto-hiding scroll viewer swallowed the pages' own scrollbars).
+- Every page scrolls with a visible scrollbar; long logs follow the newest line.
+- Shikigami purple is the real accent now (buttons and toggles were rendering near-white).
+- Home: hero with the install/update/play button and live progress inline, private-mods card with invite paste,
+  fact tiles, requirements and "What's new" from the pack changelog. Pack updates apply automatically on launch when
+  nothing needs the user (setting).
+- Play: route cards with status, password saves on Enter, big launch button, the window restores when KSP exits.
+- New Mods page (search and filters over the pack's mods), Activity page with last result, Doctor runs on first
+  visit and names the steps that need attention, Settings has invite codes and private-repo access.
+- Host tools page (host PC only): publish check and publish, invite codes.
+- Installer splash redrawn (the old one showed "Loadingâ€¦" because its script was read with the wrong encoding).
+
+### Private mods
+- `private-github` custom-package distribution: private zips live in a private GitHub repository; invite codes give
+  friends a read-only token (DPAPI-stored) so the launcher downloads and updates them automatically.
+- `vmpl private set-token | check | invite`.
+
+### Fixes from the code audit
+- Transactions: a cleanup error after commit no longer rolls back a successful install; interrupted snapshots no
+  longer leave the profile stuck; more rollback/repair edge cases (see the commit).
+- Publishing: the server policy is compared with what the server runs (a failed SSH step is retried next time);
+  existing release assets must hash to what the lock promises; rebuilt packages with an unchanged version are
+  refused; published version folders are immutable; secret scan fails closed, reads `.gz` files and decodes inline
+  override content, and also looks for the private-repo tokens; the server is backed up and stopped inside the
+  try/finally that restarts it; `--skip-assets` refuses when downloads are missing; LAN presets stay off the repo.
+- Network: a full server is "Online, but full" instead of "not a VMP server"; the Doctor warns when a password is
+  needed but not saved; a damaged LmpClient.dll no longer breaks the Doctor; servers.json signature races retry with
+  a cache-buster; rollback protection survives a bad cache; user names with spaces are redacted; ZeroTier port file.
+- App: the activity log stopped updating after 200 lines and was read across threads; an install's cancellation
+  token was disposed while the install was still running; the lock signature was deleted on a transient network
+  error.
+
+- `vmpl publish`: one-command pack release (policy re-hash from the host GameData, export, verify, stage into the
+  packs repository, changelog, servers.json build bump; dry run by default, `--execute` pushes, creates missing
+  release assets and updates the server policy over SSH with backup/stop/replace/start, then verifies the published
+  files and probes the routes). `vmpl publish-config`, `vmpl verify-remote`, `vmpl policy update`.
+- Custom-package metadata no longer carries an export timestamp, so an unchanged package is unchanged across exports.
+- Lock diff no longer reports artifact-less modules (metapackages, DLC) as changed on every update.
+- The exported pack definition carries the version actually built when `--version` overrides it.
+
+## 0.1.0 - 2026-10-22
+
+First end-to-end build.
+
+- Signed, exact-version pack locks generated from a live KSP/CKAN install; CKAN core compiled in (v1.36.4).
+- Managed profile seeded from the player's own KSP (hard links on the same drive).
+- Journaled install/update/repair with hard-link snapshots and rollback; updates download only changed archives.
+- Custom local mods as CKAN-shaped packages (GitHub release or private sideload).
+- Host capture/export with file classification and secret scan.
+- Live server status and Connection Doctor using a real VMP handshake probe; pre-flight mod-policy check.
+- Auto-join on Play (needs VMP client build 0.2.0-train.20261022.1 or newer).
+- WPF UI: dark space theme, Mica, first-run wizard, Home/Play/Activity/Doctor/Settings/About.

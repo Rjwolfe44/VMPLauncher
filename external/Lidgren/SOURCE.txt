@@ -1,0 +1,7 @@
+Origin:   VMP repository, Lidgren directory
+Project:  Lidgren.projitems (shared project consumed by VMPMod\Lidgren.Core\Lidgren.Core.csproj, net10.0)
+Commit:   dc0b44f0082226cf3c1e860f1a8d666f0cc98937
+Copied:   2026-10-22
+Files:    73 .cs files (Properties\AssemblyInfo.cs intentionally omitted)
+License:  MIT (see LICENSE)
+Refresh:  pwsh tools\Sync-Lidgren.ps1   (never edit these files by hand; suppress warnings in .editorconfig instead)

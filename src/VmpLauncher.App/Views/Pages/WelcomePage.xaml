@@ -1,0 +1,194 @@
+<UserControl
+    x:Class="VmpLauncher.App.Views.Pages.WelcomePage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    xmlns:vm="clr-namespace:VmpLauncher.App.ViewModels"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    d:DataContext="{d:DesignInstance vm:WelcomeViewModel}">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Step indicator -->
+        <Grid Grid.Row="0" Margin="40,0,40,8" MaxWidth="860">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <Image Source="pack://application:,,,/VmpLauncher;component/Assets/VmpLauncher-256.png" Width="32" Height="32" Margin="0,0,10,0" RenderOptions.BitmapScalingMode="HighQuality" />
+                <TextBlock Text="VMP Launcher setup" FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource Space.Text.PrimaryBrush}" VerticalAlignment="Center" />
+            </StackPanel>
+            <ItemsControl Grid.Column="1" ItemsSource="{Binding Steps}" HorizontalAlignment="Right" Focusable="False">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Orientation="Horizontal" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="{x:Type vm:WizardStep}">
+                        <StackPanel Orientation="Horizontal" Margin="14,0,0,0">
+                            <Border x:Name="Dot" Width="24" Height="24" CornerRadius="12" BorderThickness="1.5" BorderBrush="{StaticResource Space.Stroke.StrongBrush}" Background="Transparent">
+                                <Grid>
+                                    <TextBlock x:Name="Num" Text="{Binding Number}" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{StaticResource Space.Text.SecondaryBrush}" />
+                                    <ui:SymbolIcon x:Name="Tick" Symbol="Checkmark12" FontSize="12" Visibility="Collapsed" Foreground="{StaticResource Space.Accent.OnAccentBrush}" />
+                                </Grid>
+                            </Border>
+                            <TextBlock x:Name="Lbl" Text="{Binding Label}" Margin="8,0,0,0" VerticalAlignment="Center" FontSize="13" Foreground="{StaticResource Space.Text.SecondaryBrush}" />
+                        </StackPanel>
+                        <DataTemplate.Triggers>
+                            <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                <Setter TargetName="Dot" Property="BorderBrush" Value="{StaticResource Space.AccentBrush}" />
+                                <Setter TargetName="Num" Property="Foreground" Value="{StaticResource Space.AccentBrush}" />
+                                <Setter TargetName="Lbl" Property="Foreground" Value="{StaticResource Space.Text.PrimaryBrush}" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding IsDone}" Value="True">
+                                <Setter TargetName="Dot" Property="Background" Value="{StaticResource Space.AccentBrush}" />
+                                <Setter TargetName="Dot" Property="BorderBrush" Value="{StaticResource Space.AccentBrush}" />
+                                <Setter TargetName="Num" Property="Visibility" Value="Collapsed" />
+                                <Setter TargetName="Tick" Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </DataTemplate.Triggers>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </Grid>
+
+        <ScrollViewer Grid.Row="1" Style="{StaticResource Space.PageScroll}">
+            <Grid Margin="40,16,40,16" MaxWidth="860">
+                <!-- Step 0: welcome -->
+                <Border CornerRadius="{StaticResource Space.Radius.Hero}" Background="{StaticResource Space.StarfieldBrush}" BorderBrush="{StaticResource Space.Stroke.SubtleBrush}" BorderThickness="1" Padding="44,40"
+                        Visibility="{Binding Step, Converter={StaticResource IntEqualsToVisibility}, ConverterParameter=0}">
+                    <StackPanel>
+                        <Grid Width="112" Height="112" HorizontalAlignment="Left">
+                            <Ellipse Fill="{StaticResource Space.AccentBrush}" Opacity="0.3">
+                                <Ellipse.Effect>
+                                    <BlurEffect Radius="30" />
+                                </Ellipse.Effect>
+                            </Ellipse>
+                            <Image Source="pack://application:,,,/VmpLauncher;component/Assets/VmpLauncher-256.png" RenderOptions.BitmapScalingMode="HighQuality" />
+                        </Grid>
+                        <TextBlock Style="{StaticResource Space.Style.Hero}" Margin="0,22,0,0" Text="Welcome aboard" />
+                        <TextBlock Style="{StaticResource Space.Style.Body}" FontSize="16" Margin="0,10,0,0" Text="This launcher installs the VMP Train Career mods and gets you onto the server in a few clicks. It builds a separate modded copy, so your own KSP and saves stay exactly as they are." />
+                        <Border Margin="0,22,0,0" Padding="18,14" CornerRadius="12" Background="#CC13162B" BorderBrush="{StaticResource Space.Stroke.SubtleBrush}" BorderThickness="1">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource Space.Style.Overline}" Text="YOU NEED" />
+                                <TextBlock Style="{StaticResource Space.Style.Body}" Margin="0,6,0,0" LineHeight="22"
+                                           Text="Kerbal Space Program 1.12.5 with Making History and Breaking Ground&#10;About 15 GB of free disk space&#10;The invite code or server password from the host" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Border>
+
+                <!-- Step 1: find KSP -->
+                <Border Style="{StaticResource Space.Card}" Padding="28" Visibility="{Binding Step, Converter={StaticResource IntEqualsToVisibility}, ConverterParameter=1}">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource Space.Style.Display}" Text="Where is your Kerbal Space Program?" />
+                        <TextBlock Style="{StaticResource Space.Style.Secondary}" Margin="0,6,0,16" Text="The launcher only reads the stock game and DLC from it and never changes it." />
+                        <ItemsControl ItemsSource="{Binding Candidates}" Focusable="False">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:KspCandidate}">
+                                    <RadioButton Style="{StaticResource Space.ChoiceCard}" GroupName="ksp" IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                                 Command="{Binding DataContext.SelectCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <ui:SymbolIcon Symbol="{Binding Complete, Converter={StaticResource BoolToSymbol}}" Filled="True" FontSize="22" Foreground="{Binding Complete, Converter={StaticResource BoolToStatusBrush}}" Margin="0,0,12,0" VerticalAlignment="Top" />
+                                            <StackPanel Grid.Column="1">
+                                                <TextBlock Style="{StaticResource Space.Style.Mono}" Text="{Binding Title}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Style="{StaticResource Space.Style.Caption}" Text="{Binding Summary}" Margin="0,2,0,0" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </RadioButton>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Style="{StaticResource Space.Style.Secondary}" Text="No KSP found automatically. Use Browse to pick its folder." Margin="0,4,0,0"
+                                   Visibility="{Binding Candidates.Count, Converter={StaticResource IntEqualsToVisibility}, ConverterParameter=0}" />
+                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                            <ui:Button Content="Browse…" Command="{Binding BrowseCommand}" Icon="{ui:SymbolIcon FolderOpen24}" />
+                            <ui:Button Content="Search again" Command="{Binding DetectCommand}" Icon="{ui:SymbolIcon ArrowSync24}" Margin="8,0,0,0" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- Step 2: profile folder -->
+                <Border Style="{StaticResource Space.Card}" Padding="28" Visibility="{Binding Step, Converter={StaticResource IntEqualsToVisibility}, ConverterParameter=2}">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource Space.Style.Display}" Text="Where should the modded copy go?" />
+                        <TextBlock Style="{StaticResource Space.Style.Secondary}" Margin="0,6,0,16" Text="A short path on an NTFS drive works best. The same drive as your KSP saves several gigabytes." />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <ui:TextBox Text="{Binding ProfileRoot, UpdateSourceTrigger=PropertyChanged}" FontFamily="{StaticResource Space.Font.Mono}" AutomationProperties.Name="Install folder" />
+                            <ui:Button Grid.Column="1" Content="Browse…" Command="{Binding BrowseProfileCommand}" Margin="8,0,0,0" Icon="{ui:SymbolIcon FolderOpen24}" />
+                        </Grid>
+                        <Border Margin="0,12,0,0" Padding="14,10" CornerRadius="10" Background="{StaticResource Space.Bg.ElevatedBrush}" Visibility="{Binding ProfileHint, Converter={StaticResource NullToVisibility}}">
+                            <StackPanel Orientation="Horizontal">
+                                <ui:SymbolIcon Symbol="HardDrive20" Margin="0,0,10,0" Foreground="{StaticResource Space.AccentBrush}" VerticalAlignment="Top" />
+                                <TextBlock Style="{StaticResource Space.Style.Caption}" Foreground="{StaticResource Space.Text.PrimaryBrush}" Text="{Binding ProfileHint}" MaxWidth="700" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Border>
+
+                <!-- Step 3: player -->
+                <Border Style="{StaticResource Space.Card}" Padding="28" Visibility="{Binding Step, Converter={StaticResource IntEqualsToVisibility}, ConverterParameter=3}">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource Space.Style.Display}" Text="Who are you in orbit?" />
+                        <Grid Margin="0,16,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="20" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource Space.Style.Caption}" Text="Player name (different from the host's)" />
+                                <ui:TextBox Text="{Binding PlayerName, UpdateSourceTrigger=PropertyChanged}" MaxLength="15" Margin="0,4,0,0" PlaceholderText="1-15 letters, digits, _ or -" AutomationProperties.Name="Player name" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Style="{StaticResource Space.Style.Caption}" Text="Server password (optional if your invite has it)" />
+                                <ui:PasswordBox x:Name="PasswordBox" Margin="0,4,0,0" PasswordChanged="OnPasswordChanged" AutomationProperties.Name="Server password" />
+                            </StackPanel>
+                        </Grid>
+                        <TextBlock Style="{StaticResource Space.Style.Caption}" Margin="0,14,0,0" Text="Invite code from the host (optional: fills in the password and unlocks private mods)" />
+                        <ui:TextBox Text="{Binding InviteText, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,0" PlaceholderText="VMPINVITE1-..." FontFamily="{StaticResource Space.Font.Mono}" AutomationProperties.Name="Invite code" />
+                        <Border Margin="0,18,0,0" Padding="16,14" CornerRadius="12" Background="{StaticResource Space.Bg.ElevatedBrush}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource Space.SectionTitle}" Text="VMP disclaimer" Margin="0,0,0,6" />
+                                <TextBlock Style="{StaticResource Space.Style.Secondary}" Text="{Binding Disclaimer}" />
+                                <CheckBox Margin="0,12,0,0" IsChecked="{Binding DisclaimerAccepted}" Content="I understand and accept" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </ScrollViewer>
+
+        <!-- Footer -->
+        <Grid Grid.Row="2" Margin="40,0,40,28" MaxWidth="860">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Border Padding="12,8" CornerRadius="10" Background="#332A2410" BorderBrush="{StaticResource Space.Status.WarningBrush}" BorderThickness="1" Margin="0,0,16,0" HorizontalAlignment="Left"
+                    Visibility="{Binding Validation, Converter={StaticResource NullToVisibility}}">
+                <TextBlock Style="{StaticResource Space.Style.Body}" Foreground="{StaticResource Space.Status.WarningBrush}" Text="{Binding Validation}" />
+            </Border>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                <ui:Button Content="Back" Command="{Binding BackCommand}" Margin="0,0,10,0" MinWidth="90" Visibility="{Binding CanGoBack, Converter={StaticResource BoolToVisibility}}" />
+                <Button Style="{StaticResource Space.Button.Launch}" Command="{Binding NextCommand}" MinHeight="46" FontSize="16" Padding="30,0" Content="{Binding NextLabel}" />
+            </StackPanel>
+        </Grid>
+    </Grid>
+</UserControl>

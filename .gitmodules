@@ -1,0 +1,3 @@
+[submodule "external/CKAN"]
+	path = external/CKAN
+	url = https://github.com/KSP-CKAN/CKAN

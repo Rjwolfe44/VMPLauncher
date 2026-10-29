@@ -1,0 +1,26 @@
+<UserControl
+    x:Class="VmpLauncher.App.Views.Dialogs.AddServerView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    xmlns:vm="clr-namespace:VmpLauncher.App.ViewModels"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    d:DataContext="{d:DesignInstance vm:AddServerViewModel}"
+    MinWidth="480">
+    <StackPanel>
+        <TextBlock Style="{StaticResource Space.Style.Secondary}" TextWrapping="Wrap"
+                   Text="Another way to reach this pack's server, for example its address on your home network. It stays on this PC and uses the password saved on the Play page." />
+
+        <TextBlock Style="{StaticResource Space.Style.Overline}" Text="NAME" Margin="0,16,0,4" />
+        <ui:TextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" PlaceholderText="e.g. Train - LAN" MaxLength="40" AutomationProperties.Name="Server name" />
+
+        <TextBlock Style="{StaticResource Space.Style.Overline}" Text="ADDRESS" Margin="0,16,0,4" />
+        <ui:TextBox Text="{Binding Address, UpdateSourceTrigger=PropertyChanged}" PlaceholderText="e.g. 192.168.1.20 or 192.168.1.20:8800" MaxLength="260" AutomationProperties.Name="Server address" />
+        <TextBlock Style="{StaticResource Space.Style.Caption}" Margin="2,6,0,0" TextWrapping="Wrap" Text="Port 8800 is used unless you add one after a colon." />
+
+        <TextBlock Style="{StaticResource Space.Style.Body}" Margin="2,10,0,0" TextWrapping="Wrap" Foreground="{StaticResource Space.Status.WarningBrush}"
+                   Text="{Binding Error}" Visibility="{Binding Error, Converter={StaticResource NullToVisibility}}" />
+    </StackPanel>
+</UserControl>

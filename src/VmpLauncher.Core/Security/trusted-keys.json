@@ -1,0 +1,10 @@
+[
+  {
+    "keyId": "vmp-host-2026a",
+    "alg": "ecdsa-p256-sha256",
+    "publicKeySpki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEcCn9DTLS9vdQl26L76Jke5G6SBaiEQtJjRrXwyUcqEWaQG8pxUEeBx5GG31p07HeWZB8sjWIXlYvB7gtjVFMCg==",
+    "owner": "Rjwolfe44",
+    "notBefore": "2026-10-22T22:38:18+00:00",
+    "revoked": false
+  }
+]

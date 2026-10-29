@@ -1,0 +1,289 @@
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    xmlns:vm="clr-namespace:VmpLauncher.App.ViewModels"
+    xmlns:svc="clr-namespace:VmpLauncher.App.Services">
+
+    <!-- ===== Sidebar navigation item (a RadioButton so exactly one is active) ===== -->
+    <Style x:Key="Space.NavButton" TargetType="RadioButton">
+        <Setter Property="OverridesDefaultStyle" Value="True" />
+        <Setter Property="Foreground" Value="{StaticResource Space.Text.SecondaryBrush}" />
+        <Setter Property="FontFamily" Value="{StaticResource Space.Font.Text}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="Height" Value="42" />
+        <Setter Property="Margin" Value="12,2" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RadioButton">
+                    <Border x:Name="Bg" CornerRadius="10" Background="Transparent" BorderThickness="1" BorderBrush="Transparent">
+                        <Grid>
+                            <Border x:Name="Indicator" Width="3" Height="18" CornerRadius="2" HorizontalAlignment="Left" Margin="0,0,0,0"
+                                    Background="{StaticResource Space.AccentBrush}" Opacity="0" />
+                            <ContentPresenter Margin="14,0,10,0" VerticalAlignment="Center" />
+                        </Grid>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bg" Property="Background" Value="#FF161A33" />
+                            <Setter Property="Foreground" Value="{StaticResource Space.Text.PrimaryBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Bg" Property="Background" Value="{StaticResource Space.Accent.SoftBrush}" />
+                            <Setter TargetName="Bg" Property="BorderBrush" Value="#FF3A2F78" />
+                            <Setter TargetName="Indicator" Property="Opacity" Value="1" />
+                            <Setter Property="Foreground" Value="{StaticResource Space.Text.PrimaryBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Bg" Property="BorderBrush" Value="{StaticResource Space.AccentBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <DataTemplate x:Key="NavItemTemplate" DataType="{x:Type vm:NavItem}">
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="30" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <ui:SymbolIcon Grid.Column="0" Symbol="{Binding Symbol}" Filled="{Binding IsActive}" FontSize="19"
+                           Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" VerticalAlignment="Center" HorizontalAlignment="Left" />
+            <TextBlock Grid.Column="1" Text="{Binding Label}" VerticalAlignment="Center"
+                       Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" />
+            <Border Grid.Column="2" CornerRadius="8" Padding="7,1" Background="{StaticResource Space.AccentBrush}"
+                    Visibility="{Binding Badge, Converter={StaticResource NullToVisibility}}" VerticalAlignment="Center">
+                <TextBlock Text="{Binding Badge}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource Space.Accent.OnAccentBrush}" />
+            </Border>
+        </Grid>
+    </DataTemplate>
+
+    <!-- ===== Big launch button (Play / Install / Update) ===== -->
+    <Style x:Key="Space.Button.Launch" TargetType="Button">
+        <Setter Property="OverridesDefaultStyle" Value="True" />
+        <Setter Property="Foreground" Value="{StaticResource Space.Accent.OnAccentBrush}" />
+        <Setter Property="FontFamily" Value="{StaticResource Space.Font.Ui}" />
+        <Setter Property="FontSize" Value="18" />
+        <Setter Property="FontWeight" Value="Bold" />
+        <Setter Property="MinHeight" Value="54" />
+        <Setter Property="Padding" Value="34,0" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Grid>
+                        <Border x:Name="Glow" CornerRadius="14" Background="{StaticResource Space.AccentBrush}" Opacity="0.35" Margin="2,6,2,-4">
+                            <Border.Effect>
+                                <BlurEffect Radius="18" />
+                            </Border.Effect>
+                        </Border>
+                        <Border x:Name="Face" CornerRadius="14" Background="{StaticResource Space.AccentGradientBrush}" BorderThickness="1" BorderBrush="#40FFFFFF">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="{TemplateBinding Padding}" />
+                        </Border>
+                        <Border x:Name="Shine" CornerRadius="14" IsHitTestVisible="False" Opacity="0">
+                            <Border.Background>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                    <GradientStop Color="#33FFFFFF" Offset="0" />
+                                    <GradientStop Color="#00FFFFFF" Offset="0.6" />
+                                </LinearGradientBrush>
+                            </Border.Background>
+                        </Border>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Shine" Property="Opacity" Value="1" />
+                            <Setter TargetName="Glow" Property="Opacity" Value="0.6" />
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Face" Property="Background" Value="{StaticResource Space.Accent.PressedBrush}" />
+                            <Setter TargetName="Shine" Property="Opacity" Value="0" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Face" Property="BorderBrush" Value="#FFFFFFFF" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Face" Property="Background" Value="#FF2A2E52" />
+                            <Setter TargetName="Face" Property="BorderBrush" Value="Transparent" />
+                            <Setter TargetName="Glow" Property="Opacity" Value="0" />
+                            <Setter Property="Foreground" Value="{StaticResource Space.Text.DisabledBrush}" />
+                            <Setter Property="Cursor" Value="Arrow" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Quiet text-ish button for secondary actions inside cards -->
+    <Style x:Key="Space.Button.Link" TargetType="Button">
+        <Setter Property="OverridesDefaultStyle" Value="True" />
+        <Setter Property="Foreground" Value="{StaticResource Space.AccentBrush}" />
+        <Setter Property="FontFamily" Value="{StaticResource Space.Font.Text}" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Padding" Value="6,4" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bg" CornerRadius="6" Background="Transparent" Padding="{TemplateBinding Padding}">
+                        <ContentPresenter VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bg" Property="Background" Value="{StaticResource Space.Accent.SoftBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Foreground" Value="{StaticResource Space.Text.DisabledBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- "Details" style toggle: a small link with a chevron instead of a full-width expander bar -->
+    <Style x:Key="Space.DetailsToggle" TargetType="ToggleButton">
+        <Setter Property="OverridesDefaultStyle" Value="True" />
+        <Setter Property="Foreground" Value="{StaticResource Space.AccentBrush}" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="HorizontalAlignment" Value="Left" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToggleButton">
+                    <Border x:Name="Bg" CornerRadius="6" Padding="6,3" Background="Transparent">
+                        <StackPanel Orientation="Horizontal">
+                            <ContentPresenter VerticalAlignment="Center" />
+                            <ui:SymbolIcon x:Name="Chevron" Symbol="ChevronDown16" FontSize="12" Margin="4,1,0,0" Foreground="{TemplateBinding Foreground}" />
+                        </StackPanel>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bg" Property="Background" Value="{StaticResource Space.Accent.SoftBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Chevron" Property="Symbol" Value="ChevronUp16" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Slim progress bar with an accent gradient fill -->
+    <Style x:Key="Space.Progress" TargetType="ProgressBar">
+        <Setter Property="Height" Value="8" />
+        <Setter Property="Minimum" Value="0" />
+        <Setter Property="Maximum" Value="100" />
+        <Setter Property="Foreground" Value="{StaticResource Space.AccentGradientBrush}" />
+        <Setter Property="Background" Value="#FF23284A" />
+        <Setter Property="BorderThickness" Value="0" />
+    </Style>
+
+    <!-- Selectable card (route picker, private-mods choices) -->
+    <Style x:Key="Space.ChoiceCard" TargetType="RadioButton">
+        <Setter Property="OverridesDefaultStyle" Value="True" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Margin" Value="0,0,0,8" />
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RadioButton">
+                    <Border x:Name="Bg" CornerRadius="12" Padding="14,12" Background="{StaticResource Space.Bg.ElevatedBrush}" BorderThickness="1.5" BorderBrush="{StaticResource Space.Stroke.SubtleBrush}">
+                        <ContentPresenter />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bg" Property="BorderBrush" Value="{StaticResource Space.Stroke.StrongBrush}" />
+                            <Setter TargetName="Bg" Property="Background" Value="{StaticResource Space.Bg.HoverBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Bg" Property="BorderBrush" Value="{StaticResource Space.AccentBrush}" />
+                            <Setter TargetName="Bg" Property="Background" Value="{StaticResource Space.Accent.SoftBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Bg" Property="BorderBrush" Value="{StaticResource Space.Accent.HoverBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Requirement / preflight row: icon + label + detail -->
+    <DataTemplate x:Key="RequirementRowTemplate" DataType="{x:Type vm:RequirementRow}">
+        <Grid Margin="0,5">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="30" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <ui:SymbolIcon Grid.Column="0" FontSize="18" VerticalAlignment="Center" Filled="True"
+                           Symbol="{Binding Ok, Converter={StaticResource BoolToSymbol}}"
+                           Foreground="{Binding Ok, Converter={StaticResource BoolToStatusBrush}}" />
+            <TextBlock Grid.Column="1" Style="{StaticResource Space.Style.Body}" Text="{Binding Label}" VerticalAlignment="Center" Margin="0,0,16,0" />
+            <TextBlock Grid.Column="2" Style="{StaticResource Space.Style.Caption}" Text="{Binding Detail}" VerticalAlignment="Center" HorizontalAlignment="Right"
+                       TextAlignment="Right" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip="{Binding Detail}" />
+        </Grid>
+    </DataTemplate>
+
+    <!-- Error card -->
+    <DataTemplate x:Key="ErrorCardTemplate" DataType="{x:Type svc:UserFacingError}">
+        <Border Background="#FF2A1520" BorderBrush="#FF7A3445" BorderThickness="1" CornerRadius="{StaticResource Space.Radius.Card}" Padding="18,16" Margin="0,16,0,0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="34" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <ui:SymbolIcon Symbol="ErrorCircle24" Filled="True" Foreground="{StaticResource Space.Status.ErrorBrush}" FontSize="22" VerticalAlignment="Top" />
+                <StackPanel Grid.Column="1">
+                    <TextBlock Style="{StaticResource Space.Style.Title}" FontSize="16" Text="{Binding Title}" />
+                    <TextBlock Style="{StaticResource Space.Style.Body}" Margin="0,6,0,0" Text="{Binding Message}" />
+                    <TextBlock Style="{StaticResource Space.Style.Secondary}" Margin="0,6,0,0" Text="{Binding Suggestion}" Visibility="{Binding Suggestion, Converter={StaticResource NullToVisibility}}" />
+                    <WrapPanel Margin="0,12,0,0">
+                        <ui:Button Content="{Binding ActionLabel}" Appearance="Primary" Margin="0,0,8,6"
+                                   Command="{Binding FixCommand, Source={x:Static svc:RecoveryActions.Instance}}" CommandParameter="{Binding}"
+                                   Visibility="{Binding ActionLabel, Converter={StaticResource NullToVisibility}}" />
+                        <ui:Button Content="Troubleshoot" Icon="{ui:SymbolIcon Wrench24}" Margin="0,0,8,6"
+                                   ToolTip="Repair, restore or reinstall the pack copy"
+                                   Command="{Binding TroubleshootCommand, Source={x:Static svc:RecoveryActions.Instance}}" />
+                        <ui:Button Content="Copy report" Icon="{ui:SymbolIcon Copy24}" Margin="0,0,8,6"
+                                   ToolTip="Copies what happened, with passwords and your user name removed, to send to the host"
+                                   Command="{Binding CopyReportCommand, Source={x:Static svc:RecoveryActions.Instance}}" CommandParameter="{Binding}" />
+                    </WrapPanel>
+                    <Expander Header="Technical details" Margin="0,4,0,0" Visibility="{Binding Details, Converter={StaticResource NullToVisibility}}">
+                        <TextBox Text="{Binding Details, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" FontFamily="{StaticResource Space.Font.Mono}" FontSize="12" MaxHeight="220"
+                                 VerticalScrollBarVisibility="Auto" Background="Transparent" BorderThickness="0" Foreground="{StaticResource Space.Text.SecondaryBrush}" />
+                    </Expander>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </DataTemplate>
+
+    <!-- Badge pill -->
+    <Style x:Key="Space.Badge" TargetType="Border">
+        <Setter Property="Padding" Value="10,3" />
+        <Setter Property="CornerRadius" Value="11" />
+        <Setter Property="Background" Value="#CC1B1F3A" />
+        <Setter Property="BorderBrush" Value="{StaticResource Space.Stroke.StrongBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- Section heading -->
+    <Style x:Key="Space.SectionTitle" TargetType="TextBlock" BasedOn="{StaticResource Space.Style.Title}">
+        <Setter Property="FontSize" Value="16" />
+        <Setter Property="Margin" Value="0,0,0,10" />
+    </Style>
+
+    <!-- Page header: big title + one-line subtitle -->
+    <Style x:Key="Space.PageTitle" TargetType="TextBlock" BasedOn="{StaticResource Space.Style.Display}">
+        <Setter Property="Margin" Value="0,0,0,4" />
+    </Style>
+</ResourceDictionary>

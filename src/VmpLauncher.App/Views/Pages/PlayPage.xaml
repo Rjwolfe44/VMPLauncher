@@ -1,0 +1,166 @@
+<UserControl
+    x:Class="VmpLauncher.App.Views.Pages.PlayPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    xmlns:vm="clr-namespace:VmpLauncher.App.ViewModels"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    d:DataContext="{d:DesignInstance vm:PlayViewModel}">
+    <ScrollViewer Style="{StaticResource Space.PageScroll}">
+        <StackPanel Margin="{StaticResource Space.Page.Padding}" MaxWidth="1120">
+            <TextBlock Style="{StaticResource Space.PageTitle}" Text="Play" />
+            <TextBlock Style="{StaticResource Space.Style.Secondary}" Text="Pick how to reach the server, check you're ready, and launch." />
+            <ContentControl Content="{Binding Error}" ContentTemplate="{StaticResource ErrorCardTemplate}" Visibility="{Binding Error, Converter={StaticResource NullToVisibility}}" Focusable="False" />
+
+            <Grid Margin="0,20,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="3*" />
+                    <ColumnDefinition Width="18" />
+                    <ColumnDefinition Width="2*" MinWidth="320" />
+                </Grid.ColumnDefinitions>
+
+                <!-- Left: server routes + readiness -->
+                <StackPanel Grid.Column="0">
+                    <Border Style="{StaticResource Space.Card}">
+                        <StackPanel>
+                            <DockPanel Margin="0,0,0,12">
+                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top">
+                                    <ui:Button Content="Add server" Command="{Binding AddServerCommand}" Icon="{ui:SymbolIcon Add24}" Margin="0,0,8,0"
+                                               ToolTip="Add another address for this server, such as its home-network address" AutomationProperties.Name="Add server" />
+                                    <ui:Button Content="Check now" Command="{Binding CheckRoutesCommand}" Icon="{ui:SymbolIcon ArrowSync24}" ToolTip="Re-check the server (F5)" />
+                                </StackPanel>
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource Space.SectionTitle}" Text="Server" Margin="0" />
+                                    <TextBlock Style="{StaticResource Space.Style.Caption}" Text="{Binding Server.Source}" />
+                                </StackPanel>
+                            </DockPanel>
+                            <Border Padding="12,8" CornerRadius="10" Background="#332A2410" BorderBrush="{StaticResource Space.Status.WarningBrush}" BorderThickness="1" Margin="0,0,0,10"
+                                    Visibility="{Binding Server.Maintenance, Converter={StaticResource NullToVisibility}}">
+                                <TextBlock Style="{StaticResource Space.Style.Body}" Foreground="{StaticResource Space.Status.WarningBrush}" Text="{Binding Server.Maintenance}" />
+                            </Border>
+                            <TextBlock Style="{StaticResource Space.Style.Secondary}" Text="{Binding Server.Motd}" Margin="0,0,0,10" Visibility="{Binding Server.Motd, Converter={StaticResource NullToVisibility}}" />
+                            <ItemsControl ItemsSource="{Binding Routes}" Focusable="False">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:RouteCardViewModel}">
+                                        <RadioButton Style="{StaticResource Space.ChoiceCard}" GroupName="routes" IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                                     Command="{Binding DataContext.SelectRouteCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"
+                                                     AutomationProperties.Name="{Binding Name}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel>
+                                                    <TextBlock Style="{StaticResource Space.Style.Body}" FontWeight="SemiBold" Text="{Binding Name}" />
+                                                    <TextBlock Style="{StaticResource Space.Style.Caption}" Margin="0,2,0,0">
+                                                        <Run Text="{Binding KindLabel, Mode=OneWay}" /> <Run Text="·" /> <Run Text="{Binding Address, Mode=OneWay}" FontFamily="{StaticResource Space.Font.Mono}" />
+                                                    </TextBlock>
+                                                    <TextBlock Style="{StaticResource Space.Style.Caption}" Text="{Binding Hint}" Visibility="{Binding Hint, Converter={StaticResource NullToVisibility}}" Margin="0,2,0,0" />
+                                                </StackPanel>
+                                                <Border Grid.Column="1" Style="{StaticResource Space.Badge}" BorderBrush="{Binding StatusKind, Converter={StaticResource StatusKindToBrush}}" Margin="12,0,0,0">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <Ellipse Width="8" Height="8" Margin="0,0,7,0" VerticalAlignment="Center" Fill="{Binding StatusKind, Converter={StaticResource StatusKindToBrush}}" />
+                                                        <TextBlock Style="{StaticResource Space.Style.Caption}" Foreground="{StaticResource Space.Text.PrimaryBrush}" Text="{Binding Status}" />
+                                                        <TextBlock Style="{StaticResource Space.Style.Caption}" Text="{Binding Rtt}" Margin="6,0,0,0" Visibility="{Binding Rtt, Converter={StaticResource NullToVisibility}}" />
+                                                    </StackPanel>
+                                                </Border>
+                                                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0"
+                                                            Visibility="{Binding IsMine, Converter={StaticResource BoolToVisibility}}">
+                                                    <ui:Button Appearance="Transparent" Icon="{ui:SymbolIcon Edit24}" Padding="8" ToolTip="Edit this server"
+                                                               Command="{Binding DataContext.EditServerCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"
+                                                               AutomationProperties.Name="Edit server" />
+                                                    <ui:Button Appearance="Transparent" Icon="{ui:SymbolIcon Delete24}" Padding="8" ToolTip="Remove this server"
+                                                               Command="{Binding DataContext.RemoveServerCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"
+                                                               AutomationProperties.Name="Remove server" />
+                                                </StackPanel>
+                                            </Grid>
+                                        </RadioButton>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource Space.Card}" Margin="0,16,0,0">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource Space.SectionTitle}" Text="Ready to fly" />
+                            <ItemsControl ItemsSource="{Binding Preflight}" ItemTemplate="{StaticResource RequirementRowTemplate}" Focusable="False" />
+                            <Border Margin="0,10,0,0" Padding="12,10" CornerRadius="10" Background="{StaticResource Space.Bg.ElevatedBrush}" Visibility="{Binding PolicyLine, Converter={StaticResource NullToVisibility}}">
+                                <StackPanel Orientation="Horizontal">
+                                    <ui:SymbolIcon Symbol="{Binding PolicyKind, Converter={StaticResource StatusKindToSymbol}}" Filled="True" Foreground="{Binding PolicyKind, Converter={StaticResource StatusKindToBrush}}" Margin="0,0,10,0" VerticalAlignment="Top" />
+                                    <TextBlock Style="{StaticResource Space.Style.Caption}" Foreground="{StaticResource Space.Text.PrimaryBrush}" Text="{Binding PolicyLine}" VerticalAlignment="Center" MaxWidth="560" />
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <!-- Right: you + launch -->
+                <StackPanel Grid.Column="2">
+                    <Border Style="{StaticResource Space.Card}">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource Space.SectionTitle}" Text="You" />
+                            <TextBlock Style="{StaticResource Space.Style.Caption}" Text="Player name" />
+                            <ui:TextBox Text="{Binding PlayerName, UpdateSourceTrigger=PropertyChanged}" PlaceholderText="1-15 letters, digits, _ or -" MaxLength="15" Margin="0,4,0,14"
+                                        AutomationProperties.Name="Player name" />
+                            <DockPanel>
+                                <TextBlock DockPanel.Dock="Right" Style="{StaticResource Space.Style.Caption}" Foreground="{StaticResource Space.Status.OnlineBrush}" Text="Saved"
+                                           Visibility="{Binding PasswordSavedFlash, Converter={StaticResource BoolToVisibility}}" />
+                                <TextBlock Style="{StaticResource Space.Style.Caption}" Text="Server password (kept encrypted on this PC)" />
+                            </DockPanel>
+                            <Grid Margin="0,4,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <ui:PasswordBox x:Name="PasswordBox" PlaceholderText="{Binding HasPassword, Converter={StaticResource PasswordPlaceholder}}" PasswordChanged="OnPasswordChanged" KeyDown="OnPasswordKeyDown"
+                                                AutomationProperties.Name="Server password" />
+                                <ui:Button Grid.Column="1" Content="Save" Command="{Binding SavePasswordCommand}" Margin="8,0,0,0" Appearance="Primary" />
+                            </Grid>
+                            <Button Style="{StaticResource Space.Button.Link}" Content="Forget the saved password" Command="{Binding ForgetPasswordCommand}" Margin="-6,6,0,0" HorizontalAlignment="Left"
+                                    Visibility="{Binding HasPassword, Converter={StaticResource BoolToVisibility}}" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource Space.Card.Accent}" Margin="0,16,0,0" Padding="22,24">
+                        <StackPanel>
+                            <Button Style="{StaticResource Space.Button.Launch}" Command="{Binding PlayCommand}" IsEnabled="{Binding CanPlay}" HorizontalAlignment="Stretch" MinHeight="64" FontSize="22"
+                                    AutomationProperties.Name="Play">
+                                <StackPanel Orientation="Horizontal">
+                                    <ui:SymbolIcon Symbol="Rocket24" Filled="True" FontSize="26" Margin="0,0,12,0" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                                    <TextBlock Text="Play" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                            <TextBlock Style="{StaticResource Space.Style.Caption}" Margin="0,12,0,0" Text="{Binding PlayHint}" TextAlignment="Center" />
+                            <ui:Button Appearance="Secondary" Command="{Binding LaunchOfflineCommand}" IsEnabled="{Binding CanLaunchOffline}" HorizontalAlignment="Stretch" Margin="0,16,0,0" Padding="12,10"
+                                       AutomationProperties.Name="Just launch KSP">
+                                <StackPanel Orientation="Horizontal">
+                                    <ui:SymbolIcon Symbol="Play24" Margin="0,0,8,0" />
+                                    <TextBlock Text="Just launch KSP (no server)" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </ui:Button>
+                            <TextBlock Style="{StaticResource Space.Style.Caption}" Margin="0,8,0,0" TextAlignment="Center" TextWrapping="Wrap"
+                                       Text="Starts the game with the pack's mods without joining. Play single-player, or connect later from the VMP window." />
+                            <Border Margin="0,14,0,0" Padding="14,12" CornerRadius="10" Background="{StaticResource Space.Bg.ElevatedBrush}" Visibility="{Binding GameRunning, Converter={StaticResource BoolToVisibility}}">
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <ui:ProgressRing IsIndeterminate="True" Width="16" Height="16" Margin="0,0,10,0" />
+                                        <TextBlock Style="{StaticResource Space.Style.Body}" FontWeight="SemiBold">
+                                            <Run Text="KSP is running since" /> <Run Text="{Binding RunningSince, Mode=OneWay}" />
+                                        </TextBlock>
+                                    </StackPanel>
+                                    <TextBlock Style="{StaticResource Space.Style.Caption}" Margin="0,6,0,0" Text="The first load of a big pack takes 5 to 15 minutes. This window restores itself when the game closes." />
+                                    <TextBlock Style="{StaticResource Space.Style.Caption}" Margin="0,6,0,0" Text="When KSP has loaded: open the VMP window, pick the server, Connect."
+                                               Visibility="{Binding AutoJoinSupported, Converter={StaticResource InvertedBoolToVisibility}}" />
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Grid>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

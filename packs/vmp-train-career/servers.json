@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "packId": "vmp-train-career",
+  "sequence": 1,
+  "issuedAt": "2026-10-22T22:40:00Z",
+  "server": {
+    "id": "train-career",
+    "displayName": "VMP Train Career",
+    "protocolForkId": "VMP.VladMultiplayer",
+    "requiredBuild": "0.2.0-train.20261022.1",
+    "passwordRequired": true,
+    "mtu": 1200
+  },
+  "routes": [
+    {
+      "id": "playit",
+      "name": "Train - Playit",
+      "vmpEntryName": "Train - Playit",
+      "kind": "playit",
+      "host": "signaling-karma.tun.ply.gg",
+      "port": 18113,
+      "priority": 10,
+      "requiresSoftware": null,
+      "notes": "Works from anywhere. No extra software or port forwarding."
+    },
+    {
+      "id": "zerotier",
+      "name": "Train - ZeroTier",
+      "vmpEntryName": "Train - ZeroTier",
+      "kind": "zerotier",
+      "host": "10.37.239.191",
+      "port": 8800,
+      "priority": 20,
+      "requiresSoftware": {
+        "name": "ZeroTier One",
+        "url": "https://www.zerotier.com/download/",
+        "networkId": "633e31d8a237e3f9",
+        "subnet": "10.37.239.0/24"
+      },
+      "notes": "Install ZeroTier, join the network, then ask the host to authorize you."
+    }
+  ],
+  "motd": null,
+  "maintenance": null
+}

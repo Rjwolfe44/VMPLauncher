@@ -1,0 +1,15 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/VmpLauncher.Core/VmpLauncher.Core.csproj" />
+    <Project Path="src/VmpLauncher.Ckan/VmpLauncher.Ckan.csproj" />
+    <Project Path="src/VmpLauncher.Net/VmpLauncher.Net.csproj" />
+    <Project Path="src/VmpLauncher.Game/VmpLauncher.Game.csproj" />
+    <Project Path="src/VmpLauncher.Publishing/VmpLauncher.Publishing.csproj" />
+    <Project Path="src/VmpLauncher.Cli/VmpLauncher.Cli.csproj" />
+    <Project Path="src/VmpLauncher.App/VmpLauncher.App.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/VmpLauncher.Tests/VmpLauncher.Tests.csproj" />
+    <Project Path="tests/VmpLauncher.IntegrationTests/VmpLauncher.IntegrationTests.csproj" />
+  </Folder>
+</Solution>
