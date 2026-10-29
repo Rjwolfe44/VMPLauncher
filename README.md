@@ -73,7 +73,7 @@ $vmpl = "src\VmpLauncher.Cli\bin\Debug\net10.0-windows\win-x64\vmpl.exe"
     --ksp "C:\Games\Kerbal Space Program" --cache "$env:LOCALAPPDATA\CKAN\downloads" `
     --packs-repo ..\VMP-Packs --export-root out --policy "..\VMP\HOSTING\KSPModControl.xml" `
     --private-connection "..\VMP\HOSTING\connection.private.json" --key-id vmp-host-2026a `
-    --server-host trainpc --server-root "C:\VMP Server" --local-server-config "..\VMP\HOSTING\VMPServer\Config"
+    --server-host <ssh-alias> --server-root "C:\VMP Server" --local-server-config "..\VMP\HOSTING\VMPServer\Config"
 
 # release a pack version: policy -> export -> verify -> stage -> push + server update
 & $vmpl publish --pack packs\vmp-train-career\vmp-train-career.vmpack.json --notes "What changed"            # dry run: prints every external command
@@ -112,7 +112,8 @@ verifies the staged copy again. Without `--execute` the staging goes to a scratc
 is printed verbatim. With `--execute` it refuses a dirty or stale repository, creates missing GitHub release assets
 and checks their hash after upload, commits and pushes, uploads the policy to the server over SSH (checksum, backup,
 stop, replace, start, confirm running) only when the policy changed, then fetches everything back from the public
-URLs and probes the routes.
+URLs and probes the routes. The same step turns `ModControl` on in `Config/vmp-server.json`, or in
+`GeneralSettings.xml` on servers that still use the older settings files.
 
 The same flow is in the launcher itself on the host's PC: **Host tools** (shown only where a publisher key and a publish
 configuration exist) runs the check, shows every action, and publishes after you type PUBLISH. It also makes invite
