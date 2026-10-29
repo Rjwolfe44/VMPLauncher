@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Host: the policy update works with servers that keep all of their settings in `Config/vmp-server.json`. The remote
+  step now sets `ModControl` in that file when it exists, and in `GeneralSettings.xml` otherwise.
+- Host: the publish secret scan now also rejects `vmp-server.json` and `admin-token.txt`, which hold the server password
+  and the admin token.
+
 ## 0.4.1
 
 Send my logs.

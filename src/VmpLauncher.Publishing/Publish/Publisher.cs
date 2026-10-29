@@ -637,10 +637,18 @@ public sealed class Publisher
         sb.AppendLine("    & $manage -Action Backup -ServerRoot $root | Out-String | Write-Output");
         sb.AppendLine("    & $manage -Action Stop -ServerRoot $root | Out-String | Write-Output");
         sb.AppendLine("    Copy-Item -LiteralPath $upload -Destination (Join-Path $root 'Config\\KSPModControl.xml') -Force");
+        // Newer servers keep every setting in Config/vmp-server.json; older ones in GeneralSettings.xml.
+        sb.AppendLine("    $jsonPath=Join-Path $root 'Config\\vmp-server.json'");
         sb.AppendLine("    $generalPath=Join-Path $root 'Config\\GeneralSettings.xml'");
-        sb.AppendLine("    [xml]$general=Get-Content -LiteralPath $generalPath -Raw");
-        sb.AppendLine("    $general.DocumentElement.ModControl='true'");
-        sb.AppendLine("    $general.Save($generalPath)");
+        sb.AppendLine("    if (Test-Path -LiteralPath $jsonPath) {");
+        sb.AppendLine("        $text=[IO.File]::ReadAllText($jsonPath)");
+        sb.AppendLine("        $changed=[regex]::Replace($text,'(\"ModControl\"\\s*:\\s*)false','${1}true')");
+        sb.AppendLine("        if ($changed -ne $text) { [IO.File]::WriteAllText($jsonPath,$changed,(New-Object Text.UTF8Encoding($false))) }");
+        sb.AppendLine("    } elseif (Test-Path -LiteralPath $generalPath) {");
+        sb.AppendLine("        [xml]$general=Get-Content -LiteralPath $generalPath -Raw");
+        sb.AppendLine("        $general.DocumentElement.ModControl='true'");
+        sb.AppendLine("        $general.Save($generalPath)");
+        sb.AppendLine("    }");
         sb.AppendLine("    'remote: policy replaced'");
         sb.AppendLine("} finally {");
         sb.AppendLine("    if (Test-Path -LiteralPath $upload) { Remove-Item -LiteralPath $upload -Force }");

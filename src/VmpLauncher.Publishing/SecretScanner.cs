@@ -24,7 +24,7 @@ public sealed class SecretScanner
         new(@"(?i)(ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{30,}", RegexOptions.Compiled),
     };
 
-    private static readonly string[] ForbiddenFileNames = { "settings.xml", "settings_bkp.xml", "connection.private.json", "GeneralSettings.xml" };
+    private static readonly string[] ForbiddenFileNames = { "settings.xml", "settings_bkp.xml", "connection.private.json", "GeneralSettings.xml", "vmp-server.json", "admin-token.txt" };
 
     public int NeedleCount => _needles.Count;
 
