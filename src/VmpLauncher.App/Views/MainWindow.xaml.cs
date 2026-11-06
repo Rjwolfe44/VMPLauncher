@@ -31,6 +31,7 @@ public partial class MainWindow : FluentWindow
         HomeViewModel home,
         IActivationService activation,
         PackUpdateService packUpdates,
+        MemoryTrimmer trimmer,
         ILogger<MainWindow> log)
     {
         // The first activation is the start-up itself (Home checks then); later ones mean the player came back.
@@ -43,6 +44,22 @@ public partial class MainWindow : FluentWindow
             }
             cameBack = true;
         };
+        // While nobody is using the window (minimised, for example while KSP runs, or another window has focus) the
+        // launcher hands its spare memory back; coming back to it cancels a trim that has not run yet.
+        StateChanged += (_, _) =>
+        {
+            if (WindowState == WindowState.Minimized)
+            {
+                trimmer.Schedule(workingSet: true);
+            }
+            else
+            {
+                trimmer.WindowInUse();
+                viewModel.Server.WindowRestored();
+            }
+        };
+        Deactivated += (_, _) => trimmer.Schedule(workingSet: true);
+        Activated += (_, _) => trimmer.WindowInUse();
         _settings = settings;
         _log = log;
         _navigator = navigator;

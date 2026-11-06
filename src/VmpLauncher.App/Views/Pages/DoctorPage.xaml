@@ -40,7 +40,7 @@
                         <ui:Button Content="Open logs" Icon="{ui:SymbolIcon FolderOpen24}" Margin="0,0,8,8" Command="{Binding OpenLogsCommand}" />
                     </WrapPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,8" Visibility="{Binding Recovery.IsSendingLogs, Converter={StaticResource BoolToVisibility}}">
-                        <ui:ProgressRing IsIndeterminate="True" Width="16" Height="16" Margin="0,0,8,0" />
+                        <ui:ProgressRing Width="16" Height="16" Margin="0,0,8,0" />
                         <TextBlock Style="{StaticResource Space.Style.Secondary}" Text="{Binding Recovery.LogsStatus}" VerticalAlignment="Center" />
                     </StackPanel>
                     <TextBlock Style="{StaticResource Space.Style.Caption}" TextWrapping="Wrap" Margin="0,2,0,0"
@@ -61,7 +61,7 @@
                 <StackPanel>
                     <TextBlock Style="{StaticResource Space.SectionTitle}" Text="Connection" Margin="0,0,0,4" />
                     <StackPanel Orientation="Horizontal">
-                        <ui:ProgressRing IsIndeterminate="True" Width="16" Height="16" Margin="0,0,8,0" Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibility}}" />
+                        <ui:ProgressRing Width="16" Height="16" Margin="0,0,8,0" Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibility}}" />
                         <Ellipse Width="9" Height="9" Margin="0,0,8,0" VerticalAlignment="Center" Fill="{Binding HeadlineKind, Converter={StaticResource StatusKindToBrush}}"
                                  Visibility="{Binding HasReport, Converter={StaticResource BoolToVisibility}}" />
                         <TextBlock Style="{StaticResource Space.Style.Secondary}" Text="{Binding Headline}" VerticalAlignment="Center" />

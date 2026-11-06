@@ -29,7 +29,7 @@
                 </Grid.ColumnDefinitions>
                 <Border Width="46" Height="46" CornerRadius="12" Background="{StaticResource Space.Accent.SoftBrush}" VerticalAlignment="Top" Margin="0,0,16,0">
                     <Grid>
-                        <ui:ProgressRing IsIndeterminate="True" Width="26" Height="26" Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibility}}" />
+                        <ui:ProgressRing Width="26" Height="26" Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibility}}" />
                         <ui:SymbolIcon Symbol="{Binding StateKind, Converter={StaticResource StatusKindToSymbol}}" Filled="True" FontSize="24"
                                        Foreground="{Binding StateKind, Converter={StaticResource StatusKindToBrush}}"
                                        Visibility="{Binding IsRunning, Converter={StaticResource InvertedBoolToVisibility}}" />

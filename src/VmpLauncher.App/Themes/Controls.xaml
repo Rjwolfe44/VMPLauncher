@@ -5,6 +5,17 @@
     xmlns:vm="clr-namespace:VmpLauncher.App.ViewModels"
     xmlns:svc="clr-namespace:VmpLauncher.App.Services">
 
+    <!-- An indeterminate ProgressRing keeps its spin animation running for as long as IsIndeterminate is true, even while
+         the ring is collapsed (most of ours sit in cards that only show while something is busy), which kept the UI thread
+         busy on an idle launcher. Rings therefore only run while they are visible: do not set IsIndeterminate on them. -->
+    <Style TargetType="ui:ProgressRing" BasedOn="{StaticResource {x:Type ui:ProgressRing}}">
+        <Style.Triggers>
+            <Trigger Property="IsVisible" Value="True">
+                <Setter Property="IsIndeterminate" Value="True" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
     <!-- ===== Sidebar navigation item (a RadioButton so exactly one is active) ===== -->
     <Style x:Key="Space.NavButton" TargetType="RadioButton">
         <Setter Property="OverridesDefaultStyle" Value="True" />

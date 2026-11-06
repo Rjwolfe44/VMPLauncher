@@ -129,7 +129,7 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <ui:ProgressRing Grid.Column="0" IsIndeterminate="True" Width="22" Height="22" Margin="0,0,14,0" VerticalAlignment="Center" />
+                    <ui:ProgressRing Grid.Column="0" Width="22" Height="22" Margin="0,0,14,0" VerticalAlignment="Center" />
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock Text="{Binding ActivityTitle}" FontWeight="SemiBold" Foreground="{StaticResource Space.Text.PrimaryBrush}" />
                         <TextBlock Text="{Binding ActivityText}" Style="{StaticResource Space.Style.Caption}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />

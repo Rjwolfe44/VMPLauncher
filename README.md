@@ -40,8 +40,8 @@ The **Mods** page works like a cleaner CKAN:
   KSP with the same mods at the same versions, and review before anything installs. Only mods from CKAN are shared.
 
 The CKAN mod list is the launcher's own copy (refreshed every few days, or with the refresh button); your own CKAN's
-settings, instances and cache are only read, never changed. The full list takes about 0.5–0.8 GB of memory while the
-Mods page has been opened.
+settings, instances and cache are only read, never changed. The full list takes about 0.3 GB of memory while the
+Mods page has been opened (it peaks near 1 GB for a few seconds while it loads, then the launcher hands the rest back).
 
 ## For friends
 

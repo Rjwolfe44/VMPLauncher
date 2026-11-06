@@ -1,6 +1,15 @@
 # Changelog
 
-## Unreleased
+## 0.4.2
+
+### Changed
+
+- Much lighter on memory, so more is left for KSP. The window is drawn by the CPU instead of the GPU driver (about 100 MB
+  less; `--gpu` brings the GPU path back), the mod list's load garbage is handed back a few seconds after it loads
+  (about 600 MB less once the Mods page has been used), and the launcher trims its working set while it is minimised
+  or not in focus, for example while KSP runs.
+- Idle work is gone: no always-on 10 Hz timers (they only run while an install or update is running), spinners no
+  longer animate while hidden, and the server status is not re-probed while the window is minimised.
 
 ### Fixed
 

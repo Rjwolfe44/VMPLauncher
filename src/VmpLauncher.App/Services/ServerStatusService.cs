@@ -25,6 +25,7 @@ public sealed partial class ServerStatusService : ObservableObject
     private readonly DispatcherTimer _timer;
     private readonly SemaphoreSlim _checkGate = new(1, 1);
     private string? _loadedFor;
+    private DateTimeOffset _lastCheckUtc = DateTimeOffset.MinValue;
     private RoutesResult? _published;
 
     public ServerStatusService(ServerRoutesService routes, IRouteStatusProvider status, AppSettingsStore settings, HostToolsService host, ILogger<ServerStatusService> log)
@@ -35,7 +36,25 @@ public sealed partial class ServerStatusService : ObservableObject
         _host = host;
         _log = log;
         _timer = new DispatcherTimer(DispatcherPriority.Background) { Interval = AutoInterval };
-        _timer.Tick += async (_, _) => await CheckAllAsync(CancellationToken.None);
+        _timer.Tick += async (_, _) =>
+        {
+            // Nobody sees the status while the window is minimised (for example while KSP runs): skip the probes and
+            // catch up in WindowRestored, so no UDP sockets and probe threads are spun up for nothing.
+            if (System.Windows.Application.Current?.MainWindow is { WindowState: System.Windows.WindowState.Minimized })
+            {
+                return;
+            }
+            await CheckAllAsync(CancellationToken.None);
+        };
+    }
+
+    /// <summary>The window came back from minimised: re-check at once if the periodic check was skipped meanwhile.</summary>
+    public void WindowRestored()
+    {
+        if (Routes.Count > 0 && DateTimeOffset.UtcNow - _lastCheckUtc > AutoInterval)
+        {
+            _ = CheckAllAsync(CancellationToken.None);
+        }
     }
 
     public ObservableCollection<RouteCardViewModel> Routes { get; } = new();
@@ -170,7 +189,8 @@ public sealed partial class ServerStatusService : ObservableObject
                 }
                 try
                 {
-                    var (status, kind, rtt) = await _status.CheckAsync(r, ct);
+                    // Off the UI thread: starting a probe (socket, network thread) is synchronous until its first await.
+                    var (status, kind, rtt) = await Task.Run(() => _status.CheckAsync(r, ct), ct);
                     r.Status = status;
                     r.StatusKind = kind;
                     r.Rtt = rtt;
@@ -192,6 +212,7 @@ public sealed partial class ServerStatusService : ObservableObject
         finally
         {
             IsChecking = false;
+            _lastCheckUtc = DateTimeOffset.UtcNow;
             _checkGate.Release();
             UpdateSummary();
         }

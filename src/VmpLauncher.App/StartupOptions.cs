@@ -5,10 +5,11 @@ namespace VmpLauncher.App;
 /// <c>--data-dir &lt;path&gt;</c> (isolated launcher state, used by tests and the clean-profile proof),
 /// <c>--no-backdrop</c> (force the solid fallback instead of Mica),
 /// <c>--background</c> (dev screenshots: open without taking focus, on a secondary monitor when there is one),
+/// <c>--gpu</c> (render with the GPU; the default is software rendering, which uses far less memory),
 /// <c>--tab browse|installed|updates|vlad</c> (dev screenshots: the Mods page opens on that tab),
 /// and a single positional activation argument: a <c>vmpack://</c> URL or a <c>*.vmpack</c> file path.
 /// </summary>
-public sealed record StartupOptions(string? DataDir, bool NoBackdrop, string? Activation, string? StartPage = null, bool Background = false, string? ModsTab = null)
+public sealed record StartupOptions(string? DataDir, bool NoBackdrop, string? Activation, string? StartPage = null, bool Background = false, string? ModsTab = null, bool GpuRendering = false)
 {
     public static StartupOptions Parse(string[] args)
     {
@@ -18,6 +19,7 @@ public sealed record StartupOptions(string? DataDir, bool NoBackdrop, string? Ac
         string? page = null;
         var background = false;
         string? modsTab = null;
+        var gpu = false;
         for (var i = 0; i < args.Length; i++)
         {
             switch (args[i])
@@ -37,6 +39,9 @@ public sealed record StartupOptions(string? DataDir, bool NoBackdrop, string? Ac
                 case "--background":
                     background = true;
                     break;
+                case "--gpu":
+                    gpu = true;
+                    break;
                 default:
                     if (!args[i].StartsWith("--", StringComparison.Ordinal))
                     {
@@ -45,6 +50,6 @@ public sealed record StartupOptions(string? DataDir, bool NoBackdrop, string? Ac
                     break;
             }
         }
-        return new StartupOptions(dataDir, noBackdrop, activation, page, background, modsTab);
+        return new StartupOptions(dataDir, noBackdrop, activation, page, background, modsTab, gpu);
     }
 }

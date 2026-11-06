@@ -24,6 +24,13 @@ public static class Program
             .Run();
 
         var options = StartupOptions.Parse(args);
+        if (!options.GpuRendering)
+        {
+            // WPF's GPU path loads the graphics driver's user-mode DLLs and keeps D3D surfaces: about 100 MB of private
+            // memory for a window that is mostly static, next to a game that wants every MB of RAM and VRAM. Drawing on
+            // the CPU costs nothing measurable while idle and little while the UI animates. "--gpu" restores the GPU path.
+            System.Windows.Media.RenderOptions.ProcessRenderMode = System.Windows.Interop.RenderMode.SoftwareOnly;
+        }
         // Moves 0.2.1-era data out of Velopack's install folder (Setup and uninstall would delete it).
         var (paths, migrationNotes) = options.DataDir is null ? DataMigration.ResolveDefault() : (new LauncherPaths(options.DataDir), Array.Empty<string>());
         paths.EnsureCreated();

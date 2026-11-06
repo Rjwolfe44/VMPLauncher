@@ -1,7 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
-using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
@@ -32,7 +31,7 @@ public partial class HomeViewModel : ObservableObject
     private readonly ServerStatusService _server;
     private readonly ILogger<HomeViewModel> _log;
     private readonly RecoveryActions _recovery;
-    private readonly DispatcherTimer _timer;
+    private readonly OperationPoller _poller;
     private DateTimeOffset _lastRefresh = DateTimeOffset.MinValue;
     private OperationKind? _lastKind;
     private string? _autoUpdateTriedFor;
@@ -48,9 +47,7 @@ public partial class HomeViewModel : ObservableObject
         _runner = runner;
         _server = server;
         _log = log;
-        _timer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(100) };
-        _timer.Tick += (_, _) => SampleOperation();
-        _timer.Start();
+        _poller = new OperationPoller(runner, SampleOperation);
         launcher.PrivateMods.Changed += () => { if (_launcher.CurrentPack is not null) { UpdatePrivate(); UpdateState(); } };
         runner.Finished += _ => System.Windows.Application.Current?.Dispatcher.BeginInvoke(UpdateState);
     }

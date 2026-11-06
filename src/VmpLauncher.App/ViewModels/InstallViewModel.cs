@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using VmpLauncher.App.Services;
@@ -13,16 +12,14 @@ public partial class InstallViewModel : ObservableObject
 
     private readonly OperationRunner _runner;
     private readonly IAppNavigator _navigation;
-    private readonly DispatcherTimer _timer;
+    private readonly OperationPoller _poller;
     private long _nextLine;
 
     public InstallViewModel(OperationRunner runner, IAppNavigator navigation)
     {
         _runner = runner;
         _navigation = navigation;
-        _timer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(100) };
-        _timer.Tick += (_, _) => Sample();
-        _timer.Start();
+        _poller = new OperationPoller(runner, Sample);
     }
 
     [ObservableProperty] private bool _isRunning;

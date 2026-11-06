@@ -22,11 +22,12 @@ public sealed class ModManagerService
     private readonly ILogger<ModManagerService> _log;
     private readonly AppSettingsStore _settings;
     private readonly LibraryService _library;
+    private readonly MemoryTrimmer _trimmer;
     private readonly ConcurrentDictionary<string, Task<ModDetails>> _details = new(StringComparer.Ordinal);
     private CatalogService? _catalog;
     private Task<CatalogUpdateOutcome>? _updating;
 
-    public ModManagerService(LauncherPaths paths, CkanWorker worker, LauncherService launcher, OperationRunner runner, AppSettingsStore settings, LibraryService library, ILogger<ModManagerService> log)
+    public ModManagerService(LauncherPaths paths, CkanWorker worker, LauncherService launcher, OperationRunner runner, AppSettingsStore settings, LibraryService library, MemoryTrimmer trimmer, ILogger<ModManagerService> log)
     {
         _paths = paths;
         _worker = worker;
@@ -34,6 +35,7 @@ public sealed class ModManagerService
         _runner = runner;
         _settings = settings;
         _library = library;
+        _trimmer = trimmer;
         _log = log;
         Changed += () => _details.Clear();
     }
@@ -98,6 +100,7 @@ public sealed class ModManagerService
             }, CancellationToken.None).ConfigureAwait(false);
             _log.LogInformation("Mod catalog warmed up in {Seconds:F1} s", sw.Elapsed.TotalSeconds);
             await EnsureLibraryAsync(false, CancellationToken.None).ConfigureAwait(false);
+            _trimmer.Schedule();
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -133,6 +136,7 @@ public sealed class ModManagerService
             var outcome = await OnCatalog(c => c.Update(force, progress, ct), ct).ConfigureAwait(false);
             _log.LogInformation("Catalog refresh: {Changed}, {Mods} mods, {New} new, {Seconds:F1} s", outcome.Changed ? "updated" : "unchanged", outcome.Mods, outcome.NewMods, outcome.Elapsed.TotalSeconds);
             await EnsureLibraryAsync(force, ct).ConfigureAwait(false);
+            _trimmer.Schedule();
             Changed?.Invoke();
             return outcome;
         }
@@ -151,6 +155,7 @@ public sealed class ModManagerService
             await UpdateCatalogAsync(false, progress, ct).ConfigureAwait(false);
             return (true, false);
         }
+        _trimmer.Schedule();
         return (true, stale);
     }
 
@@ -169,7 +174,9 @@ public sealed class ModManagerService
     public async Task<CatalogSnapshot> SnapshotAsync(SetupInfo setup, CancellationToken ct)
     {
         await EnsureLibraryAsync(false, ct).ConfigureAwait(false);
-        return await OnCatalog(c => c.Build(TargetFor(setup)), ct).ConfigureAwait(false);
+        var snapshot = await OnCatalog(c => c.Build(TargetFor(setup)), ct).ConfigureAwait(false);
+        _trimmer.Schedule();
+        return snapshot;
     }
 
     /// <summary>A mod's details; remembered until the catalog or the setup's mods change.</summary>
@@ -197,6 +204,7 @@ public sealed class ModManagerService
         }
         finally
         {
+            _trimmer.Schedule();
             Changed?.Invoke();
         }
     }

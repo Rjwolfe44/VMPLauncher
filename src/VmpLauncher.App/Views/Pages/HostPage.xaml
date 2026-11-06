@@ -46,7 +46,7 @@
                             </Expander>
                             <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
                                 <ui:Button Content="Check" Command="{Binding CheckCommand}" Appearance="Primary" Icon="{ui:SymbolIcon Search24}" IsEnabled="{Binding IsWorking, Converter={StaticResource InvertBool}}" />
-                                <ui:ProgressRing IsIndeterminate="True" Width="20" Height="20" Margin="12,0,0,0" Visibility="{Binding IsWorking, Converter={StaticResource BoolToVisibility}}" />
+                                <ui:ProgressRing Width="20" Height="20" Margin="12,0,0,0" Visibility="{Binding IsWorking, Converter={StaticResource BoolToVisibility}}" />
                             </StackPanel>
 
                             <!-- Result -->

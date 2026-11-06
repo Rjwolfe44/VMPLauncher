@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using VmpLauncher.App.Services;
@@ -24,7 +23,7 @@ public partial class MainWindowViewModel : ObservableObject
     private readonly OperationRunner _runner;
     private readonly IAppNavigator _navigator;
     private readonly LauncherService _launcher;
-    private readonly DispatcherTimer _timer;
+    private readonly OperationPoller _poller;
 
     public MainWindowViewModel(OperationRunner runner, IAppNavigator navigator, LauncherService launcher, ServerStatusService server, UpdateService updates, HostToolsService host)
     {
@@ -50,9 +49,7 @@ public partial class MainWindowViewModel : ObservableObject
         };
         navigator.Navigated += OnNavigated;
         launcher.StateChanged += UpdatePackLine;
-        _timer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(100) };
-        _timer.Tick += (_, _) => Sample();
-        _timer.Start();
+        _poller = new OperationPoller(runner, Sample);
     }
 
     public ObservableCollection<NavItem> NavItems { get; }

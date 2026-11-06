@@ -24,6 +24,7 @@ public static class ServiceRegistration
         services.AddSingleton<AppSettingsStore>();
         services.AddSingleton<ISecretStore, DpapiSecretStore>();
         services.AddSingleton<OperationRunner>();
+        services.AddSingleton<MemoryTrimmer>();
         services.AddSingleton<PackCatalogService>();
         services.AddSingleton<PrivateModsService>();
         // CKAN is not thread-safe: the pack and the mod manager share one CKAN thread.
