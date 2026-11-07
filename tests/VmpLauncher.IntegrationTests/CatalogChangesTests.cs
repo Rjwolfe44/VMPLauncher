@@ -10,6 +10,8 @@ using Xunit;
 namespace VmpLauncher.IntegrationTests;
 
 /// <summary>The general mod manager against the fixture CKAN universe: catalog, preview, apply, rollback, CKAN lock.</summary>
+// Same collection as the transaction tests: those dispose every CKAN registry manager in the process (Recover, TestWorld).
+[Collection("ckan")]
 public sealed class CatalogChangesTests : IDisposable
 {
     private readonly TestWorld _w = new("catalog");

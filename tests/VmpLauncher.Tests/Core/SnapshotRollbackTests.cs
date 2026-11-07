@@ -117,6 +117,92 @@ public sealed class SnapshotRollbackTests : IDisposable
         Assert.DoesNotContain(verify.UnknownDlls, d => d.Contains("secret", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public void Parallel_snapshot_of_long_paths_restores_them_and_a_discarded_snapshot_leaves_game_files_alone()
+    {
+        // Past MAX_PATH: the raw Win32 calls (hard link, attribute-only open) need the long-path form.
+        var deep = "GameData/M/" + string.Join('/', Enumerable.Range(0, 12).Select(i => $"folder-with-a-long-name-{i:00}"));
+        for (var i = 0; i < 100; i++)
+        {
+            Write($"{deep}/file{i:000}.cfg", $"content {i}");
+        }
+        Assert.True(Game($"{deep}/file000.cfg").Length > 300);
+        FileParallelism.Override = 8;
+        try
+        {
+            var manifest = SnapshotEngine.Create(_profile, FileRules.Default, "t5", null);
+            Assert.Equal(101, manifest.Files.Count);
+            Assert.All(manifest.Files, f => Assert.NotNull(f.FileId));
+            Assert.Equal(2u, NativeFiles.GetFileIdentity(Game($"{deep}/file099.cfg")).Links); // linked, not copied
+            for (var i = 0; i < 50; i++)
+            {
+                File.Delete(Game($"{deep}/file{i:000}.cfg"));                 // removed by the transaction
+            }
+            Write($"{deep}/created.cfg", "created by the transaction");
+
+            var rb = Restore("t5");
+            Assert.Empty(rb.Errors);
+            for (var i = 0; i < 50; i++)
+            {
+                Assert.Equal($"content {i}", File.ReadAllText(Game($"{deep}/file{i:000}.cfg")));
+            }
+            Assert.False(File.Exists(Game($"{deep}/created.cfg")));
+
+            SnapshotEngine.Discard(_profile, "t5");
+            Assert.False(Directory.Exists(Path.Combine(_profile.SnapshotsDir, "t5")));
+            Assert.True(SnapshotEngine.HasTrash(_profile));
+            Assert.Equal(1, SnapshotEngine.EmptyTrash(_profile));
+            Assert.False(SnapshotEngine.HasTrash(_profile));
+            for (var i = 51; i < 100; i++)
+            {
+                Assert.Equal($"content {i}", File.ReadAllText(Game($"{deep}/file{i:000}.cfg")));
+            }
+        }
+        finally
+        {
+            FileParallelism.Override = null;
+        }
+    }
+
+    [Fact]
+    public void Emptying_the_trash_removes_a_junction_without_touching_what_it_points_to()
+    {
+        var outside = Path.Combine(_root, "outside2");
+        Directory.CreateDirectory(outside);
+        File.WriteAllText(Path.Combine(outside, "keep.txt"), "not the launcher's");
+        var trashed = Path.Combine(SnapshotEngine.TrashDir(_profile), "old-snapshot", "game", "GameData");
+        Directory.CreateDirectory(trashed);
+        File.WriteAllText(Path.Combine(trashed, "a.cfg"), "a");
+        _junction = Path.Combine(trashed, "Link");
+        CreateJunction(_junction, outside);
+
+        Assert.Equal(1, SnapshotEngine.EmptyTrash(_profile));
+        Assert.False(Directory.Exists(Path.Combine(SnapshotEngine.TrashDir(_profile), "old-snapshot")));
+        Assert.Equal("not the launcher's", File.ReadAllText(Path.Combine(outside, "keep.txt")));
+    }
+
+    [Fact]
+    public void A_trash_folder_that_is_a_junction_is_never_used()
+    {
+        var outside = Path.Combine(_root, "outside3");
+        Directory.CreateDirectory(Path.Combine(outside, "looks-like-a-snapshot"));
+        File.WriteAllText(Path.Combine(outside, "looks-like-a-snapshot", "keep.txt"), "not the launcher's");
+        _junction = SnapshotEngine.TrashDir(_profile);
+        CreateJunction(_junction, outside);
+        var logged = new List<string>();
+
+        Assert.False(SnapshotEngine.HasTrash(_profile, logged.Add));
+        Assert.Equal(0, SnapshotEngine.EmptyTrash(_profile, logged.Add));
+        SnapshotEngine.Create(_profile, FileRules.Default, "t6", null);
+        SnapshotEngine.Discard(_profile, "t6"); // deleted in place instead of moved through the link
+
+        Assert.False(Directory.Exists(Path.Combine(_profile.SnapshotsDir, "t6")));
+        Assert.Equal(new[] { "looks-like-a-snapshot" }, Directory.EnumerateFileSystemEntries(outside).Select(Path.GetFileName));
+        Assert.Equal("not the launcher's", File.ReadAllText(Path.Combine(outside, "looks-like-a-snapshot", "keep.txt")));
+        Assert.True(logged.Count <= 1, "logged at most once");
+        Assert.Equal("m", File.ReadAllText(Game("GameData/M/m.cfg")));
+    }
+
     private static void CreateJunction(string link, string target)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(link)!);

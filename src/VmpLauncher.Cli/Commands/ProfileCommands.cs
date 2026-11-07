@@ -314,7 +314,13 @@ internal static class ProfileCommands
             }
             if (result.IsClean)
             {
-                new InstalledState { LockSha256 = state.LockSha256, PackId = state.PackId, PackVersion = state.PackVersion, AppliedUtc = state.AppliedUtc, Files = result.Records }.Write(pp);
+                var fullCheck = parse.GetValue(full);
+                (state with
+                {
+                    Files = result.Records,
+                    LastFullCheckUtc = fullCheck ? DateTimeOffset.UtcNow : state.LastFullCheckUtc,
+                    UpdatesSinceFullCheck = fullCheck ? 0 : state.UpdatesSinceFullCheck,
+                }).Write(pp);
             }
             return result.IsClean ? 0 : 3;
         });

@@ -388,11 +388,13 @@ public sealed class ProfileSession : IDisposable
                 problems.Add($"registry has extra module {im.identifier} {im.Module.version}");
             }
         }
+        var inv = inventoryOwnedPaths.ToHashSet(Platform.PathComparer);
+        // The registry lists folders too; only paths the inventory does not name as files need a disk check (a pack
+        // file replaced by a folder still fails the file check that follows).
         var registryFiles = Registry.InstalledFileInfo()
             .Select(r => r.relPath)
-            .Where(p => !Directory.Exists(Instance.ToAbsoluteGameDir(p)))
+            .Where(p => inv.Contains(p) || !Directory.Exists(Instance.ToAbsoluteGameDir(p)))
             .ToHashSet(Platform.PathComparer);
-        var inv = inventoryOwnedPaths.ToHashSet(Platform.PathComparer);
         var onlyRegistry = registryFiles.Except(inv, Platform.PathComparer).Take(10).ToList();
         var onlyInventory = inv.Except(registryFiles, Platform.PathComparer).Take(10).ToList();
         if (onlyRegistry.Count > 0 || onlyInventory.Count > 0)

@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.4.3
+
+### Changed
+
+- Pack updates are faster at the end, where they used to look stuck. On a test copy shaped like a real pack copy
+  (28,000 files) an update went from about 16 s to about 5 s; how much a real update gains shows in the new log lines.
+  - The final check no longer reads the whole pack copy each time. A file that is still the same file hashed last time
+    (same size, time and NTFS file id) keeps its recorded hash; every file the update wrote is hashed. Every file is
+    hashed again on the first update after 30 days or after 10 updates, and after a Repair resets the count. The first
+    update after installing 0.4.3 is one of these full checks.
+  - The snapshot, its check and the hashing run on several threads: up to 16, two fewer than the PC has, 2 on a hard
+    disk and 4 when the drive type is unknown. Reading a file's identity no longer opens it for reading.
+  - The old snapshot is moved aside the moment the update is saved, and deleted after the update reports finished (or
+    at the next start if the launcher was closed first).
+- The progress text names each final step (snapshot, overrides, registry, checking files with a count, saving). The
+  launcher log now records each step of an install or update: one line per phase, such as `Update phase snapshot:
+  2.90 s (27,971 files)`, and a summary such as `Update phases (ok): validate 0.04 s, ... total 4.93 s`.
+
 ## 0.4.2
 
 ### Changed

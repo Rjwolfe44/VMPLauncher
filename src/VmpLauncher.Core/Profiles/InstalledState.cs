@@ -12,6 +12,22 @@ public sealed record InstalledState
     public required DateTimeOffset AppliedUtc { get; init; }
     public required IReadOnlyList<InstalledFileRecord> Files { get; init; }
 
+    /// <summary>When every pack file was last hashed (install, repair, or an update's full check). Null in older state files.</summary>
+    public DateTimeOffset? LastFullCheckUtc { get; init; }
+
+    /// <summary>Updates committed with the incremental check (only changed files hashed) since <see cref="LastFullCheckUtc"/>.</summary>
+    public int UpdatesSinceFullCheck { get; init; }
+
+    /// <summary>An update hashes every file again after this long, so bit rot or an in-place edit that kept size, time and file id is still found.</summary>
+    public static readonly TimeSpan FullCheckMaxAge = TimeSpan.FromDays(30);
+
+    /// <summary>... or after this many incremental updates, whichever comes first.</summary>
+    public const int FullCheckEveryUpdates = 10;
+
+    /// <summary>True when the next update must hash every file instead of only the changed ones.</summary>
+    public bool NeedsFullCheck(DateTimeOffset now)
+        => LastFullCheckUtc is not { } last || now - last > FullCheckMaxAge || now < last || UpdatesSinceFullCheck >= FullCheckEveryUpdates;
+
     public static InstalledState? TryRead(ProfilePaths profile)
         => File.Exists(profile.InstalledStateFile) ? LauncherJson.ReadFile<InstalledState>(profile.InstalledStateFile, 256L * 1024 * 1024) : null;
 

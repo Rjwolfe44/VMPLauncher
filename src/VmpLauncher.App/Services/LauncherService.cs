@@ -71,6 +71,11 @@ public sealed class LauncherService : IDisposable
         {
             return;
         }
+        if (ProfilePaths.Exists && SnapshotEngine.HasTrash(ProfilePaths))
+        {
+            // Snapshots of a finished update whose deletion the app did not get to (closed, crashed): delete them now.
+            QueueTrashCleanup(ProfilePaths);
+        }
         try
         {
             var installedLock = InstalledState.TryRead(ProfilePaths)?.LockSha256;
@@ -241,13 +246,50 @@ public sealed class LauncherService : IDisposable
     {
         // Private packages first: nothing in the profile changes until every file is verified locally.
         var sideloads = prepared ?? await PrepareDownloadsAsync(pack, isUpdate, progress, token).ConfigureAwait(false);
-        return await _worker.RunAsync(() =>
+        ProfilePaths? updated = null;
+        var report = await _worker.RunAsync(() =>
         {
             var profile = EnsureProfileSeeded(pack, progress);
-            var ops = new ProfileOperations(_paths, new ProgressWriter(progress), progress);
-            var request = new ProfileOperations.Request(profile, new ProfileOperations.LockSource(pack.LockPath, pack.InventoryPath), CacheDir, Offline: false, sideloads);
-            return isUpdate ? ops.Update(request, token) : ops.Install(request, token);
+            var ops = new ProfileOperations(_paths, new ProgressWriter(progress, _log), progress);
+            // An update's snapshot links every pack file: it goes to the profile's trash at the commit and is deleted
+            // after the update reports finished (below), not while the player waits.
+            var request = new ProfileOperations.Request(profile, new ProfileOperations.LockSource(pack.LockPath, pack.InventoryPath), CacheDir, Offline: false, sideloads,
+                DeferSnapshotDeletion: isUpdate);
+            var result = isUpdate ? ops.Update(request, token) : ops.Install(request, token);
+            updated = isUpdate ? profile : null;
+            return result;
         }, token).ConfigureAwait(false);
+        if (updated is not null)
+        {
+            QueueTrashCleanup(updated);
+        }
+        return report;
+    }
+
+    /// <summary>
+    /// Deletes discarded snapshots on the CKAN worker after the current operation, so the next operation simply queues
+    /// behind it. Best effort: whatever is left is deleted at the next transaction or recovery.
+    /// </summary>
+    private void QueueTrashCleanup(ProfilePaths profile)
+    {
+        try
+        {
+            _ = _worker.RunAsync(() =>
+            {
+                try
+                {
+                    new ProfileOperations(_paths, new ProgressWriter(null, _log)).EmptyTrash(profile);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or LauncherException)
+                {
+                    _log.LogWarning(ex, "Could not delete old snapshot folders; they are removed at the next update");
+                }
+            });
+        }
+        catch (ObjectDisposedException)
+        {
+            // The app is closing: the next start deletes them.
+        }
     }
 
     private async Task<IReadOnlyDictionary<string, string>> PrepareDownloadsAsync(ResolvedPack pack, bool isUpdate, IProgress<VmpLauncher.Ckan.Users.CkanProgress> progress, CancellationToken token)
@@ -283,7 +325,7 @@ public sealed class LauncherService : IDisposable
                 }
                 // Private packages before anything moves: a missing invite then fails with the copy untouched.
                 var prepared = await PrepareDownloadsAsync(pack, isUpdate: false, progress, token).ConfigureAwait(false);
-                var log = new ProgressWriter(progress);
+                var log = new ProgressWriter(progress, _log);
                 var outcome = await ProfileReinstaller.RunAsync(profile.Root, pack.Lock.FileRules, () => InstallWorkAsync(pack, isUpdate: false, progress, token, prepared), log).ConfigureAwait(false);
                 _log.LogInformation("Reinstalled {Version}: kept {Folders} folders and {Files} settings files{LeftOver}", pack.Lock.Pack.Version,
                     outcome.Kept?.Folders ?? 0, outcome.Kept?.Files ?? 0, outcome.LeftOver is null ? string.Empty : $"; {outcome.LeftOver} is removed later");
@@ -329,7 +371,7 @@ public sealed class LauncherService : IDisposable
                 {
                     await ImportFromCkanCachesAsync(installed, progress, token).ConfigureAwait(false);
                 }
-                return await _worker.RunAsync(() => new ProfileOperations(_paths, new ProgressWriter(progress), progress).Repair(ProfilePaths, CacheDir, quarantineUnknownDlls, token, sideloads), token).ConfigureAwait(false);
+                return await _worker.RunAsync(() => new ProfileOperations(_paths, new ProgressWriter(progress, _log), progress).Repair(ProfilePaths, CacheDir, quarantineUnknownDlls, token, sideloads), token).ConfigureAwait(false);
             }).ConfigureAwait(false);
         }
         finally
@@ -347,7 +389,7 @@ public sealed class LauncherService : IDisposable
             {
                 using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, outer);
                 var token = linked.Token;
-                return await _worker.RunAsync(() => new ProfileOperations(_paths, new ProgressWriter(progress), progress).Recover(ProfilePaths, token), token).ConfigureAwait(false);
+                return await _worker.RunAsync(() => new ProfileOperations(_paths, new ProgressWriter(progress, _log), progress).Recover(ProfilePaths, token), token).ConfigureAwait(false);
             }).ConfigureAwait(false);
         }
         finally
@@ -608,8 +650,11 @@ public sealed class LauncherService : IDisposable
 
     public void Dispose() => _worker.Dispose();
 
-    /// <summary>Routes CKAN/Core log lines into the operation's recent-lines list.</summary>
-    private sealed class ProgressWriter(IProgress<VmpLauncher.Ckan.Users.CkanProgress> progress) : TextWriter
+    /// <summary>
+    /// Routes CKAN/Core log lines into the operation's recent-lines list and the launcher log, so the log shows each
+    /// step of an install or update (with its phase timings) instead of going silent until the operation finishes.
+    /// </summary>
+    private sealed class ProgressWriter(IProgress<VmpLauncher.Ckan.Users.CkanProgress>? progress, ILogger? log = null) : TextWriter
     {
         private readonly System.Text.StringBuilder _line = new();
         public override System.Text.Encoding Encoding => System.Text.Encoding.UTF8;
@@ -621,7 +666,8 @@ public sealed class LauncherService : IDisposable
                 _line.Clear();
                 if (text.Length > 0)
                 {
-                    progress.Report(new VmpLauncher.Ckan.Users.CkanProgress(text, -1, null));
+                    progress?.Report(new VmpLauncher.Ckan.Users.CkanProgress(text, -1, null));
+                    log?.LogInformation("{Line}", text);
                 }
             }
             else

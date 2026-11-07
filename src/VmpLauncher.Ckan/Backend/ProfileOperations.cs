@@ -24,7 +24,13 @@ public sealed class ProfileOperations
 {
     public sealed record LockSource(string LockPath, string InventoryPath);
 
-    public sealed record Request(ProfilePaths Profile, LockSource Lock, string CacheDir, bool Offline, IReadOnlyDictionary<string, string>? SideloadFiles = null, bool KeepSnapshot = false);
+    /// <param name="DeferSnapshotDeletion">
+    /// After the commit the snapshot is only moved to the profile's trash (instant); the caller deletes it later with
+    /// <see cref="EmptyTrash"/> so the operation can report "finished" without waiting for tens of thousands of deletes.
+    /// Trash left by a crash or a closed app is deleted at the start of the next transaction or recovery.
+    /// </param>
+    public sealed record Request(ProfilePaths Profile, LockSource Lock, string CacheDir, bool Offline, IReadOnlyDictionary<string, string>? SideloadFiles = null, bool KeepSnapshot = false,
+        bool DeferSnapshotDeletion = false);
 
     public sealed record Report(string Operation, string TxnId, int ModulesInstalled, int ModulesRemoved, int FilesVerified, long Bytes, long BytesDownloaded, TimeSpan Elapsed, IReadOnlyList<string> Warnings);
 
@@ -126,7 +132,7 @@ public sealed class ProfileOperations
                 session.InstallAll(toInstall, WrapProgress(session), ct);
             }
             return (toInstall.Count, toRemove.Count);
-        }, ct, previousLockSha: state.LockSha256);
+        }, ct, previousLockSha: state.LockSha256, previousState: state);
     }
 
     private IProgress<CkanProgress>? WrapProgress(ProfileSession session)
@@ -139,11 +145,17 @@ public sealed class ProfileOperations
         return _progress;
     }
 
-    private Report RunTransaction(string operation, Request r, Func<ProfileSession, PackLock, InventoryDocument, (int Installed, int Removed)> apply, CancellationToken ct, string? previousLockSha = null)
+    /// <param name="previousState">
+    /// The committed state before an update: its per-file records (size, time, file id, hash) let the final check hash
+    /// only files that changed (<see cref="InstallVerifier.Mode.Incremental"/>). Null for an install: everything is hashed.
+    /// </param>
+    private Report RunTransaction(string operation, Request r, Func<ProfileSession, PackLock, InventoryDocument, (int Installed, int Removed)> apply, CancellationToken ct, string? previousLockSha = null,
+        InstalledState? previousState = null)
     {
         var sw = Stopwatch.StartNew();
+        var timer = new PhaseTimer(operation, _log.WriteLine);
         var warnings = new List<string>();
-        var (lockDoc, inventory, lockSha) = LoadAndValidate(r.Lock);
+        var (lockDoc, inventory, lockSha) = timer.Time("validate", () => LoadAndValidate(r.Lock), v => $"{v.Inventory.Files.Count:N0} inventory files");
         _log.WriteLine($"Lock {lockDoc.Pack.Id} {lockDoc.Pack.Version}: {lockDoc.Ckan.Modules.Count} modules, {inventory.Files.Count} files, {lockDoc.Inventory.TotalBytes:N0} bytes.");
 
         r.Profile.EnsureCreated();
@@ -155,6 +167,7 @@ public sealed class ProfileOperations
 
         using var profileLock = ProfileLock.Acquire(r.Profile, operation);
         ThrowIfIncomplete(r.Profile);
+        EmptyLeftoverTrash(r.Profile, timer, warnings);
         // Game-root files the pack owned before this transaction (its own inventory adds the ones it will own).
         var previousRootFiles = previousLockSha is null ? Array.Empty<string>() : PreviousRootFiles(r.Profile);
         var txnId = TransactionJournal.NewId();
@@ -170,9 +183,11 @@ public sealed class ProfileOperations
         try
         {
             var user = new VmpCkanUser(progress: _progress);
-            session = new ProfileSession(_paths, r.Profile, lockDoc, r.CacheDir, user);
+            Status("Loading the CKAN registry...");
+            session = timer.Time("session", () => new ProfileSession(_paths, r.Profile, lockDoc, r.CacheDir, user));
             _log.WriteLine("Resolving...");
-            session.AssertExactResolution();
+            timer.Time("resolve", session.AssertExactResolution);
+            var prefetchPhase = timer.Start("prefetch");
 
             // Files the user already has (private packages, or archives handed over out of band) go into the cache
             // first, hash-verified, so they are neither downloaded nor reported missing.
@@ -209,6 +224,8 @@ public sealed class ProfileOperations
             {
                 fetcher.Fetch(o.Content!.Artifact!, ct);
             }
+            prefetchPhase.Detail = $"{plan.Verified.Count} cached, {plan.ToDownload.Count} downloaded";
+            prefetchPhase.Dispose();
             journal = journal.Advance(TxnState.Prefetched);
             journal.Write(r.Profile);
 
@@ -216,7 +233,8 @@ public sealed class ProfileOperations
             journal = journal.Advance(TxnState.Snapshotting) with { SnapshotDir = Path.Combine(r.Profile.SnapshotsDir, txnId) };
             journal.Write(r.Profile);
             var rootFiles = RootFilesOf(inventory).Concat(previousRootFiles);
-            var manifest = SnapshotEngine.Create(r.Profile, lockDoc.FileRules, txnId, rootFiles, ct);
+            Status("Taking a snapshot of the current files...");
+            var manifest = timer.Time("snapshot", () => SnapshotEngine.Create(r.Profile, lockDoc.FileRules, txnId, rootFiles, ct), m => $"{m.Files.Count:N0} files");
             snapshotTaken = true;
             _log.WriteLine($"Snapshot: {manifest.Files.Count} files linked.");
             journal = journal.Advance(TxnState.Snapshotted);
@@ -224,31 +242,48 @@ public sealed class ProfileOperations
 
             journal = journal.Advance(TxnState.Applying);
             journal.Write(r.Profile);
-            var applySw = Stopwatch.StartNew();
-            (installed, removed) = apply(session, lockDoc, inventory);
-            _log.WriteLine($"CKAN apply finished in {applySw.Elapsed}.");
+            (installed, removed) = timer.Time("apply", () => apply(session, lockDoc, inventory), x => $"{x.Installed} installed, {x.Removed} removed");
 
             journal = journal.Advance(TxnState.Overriding);
             journal.Write(r.Profile);
-            session.AssertOverrideTargets(lockDoc.Overrides);
-            var notes = OverrideApplier.Apply(r.Profile, lockDoc.Overrides, a => fetcher.Fetch(a, ct));
+            Status("Applying the pack's file overrides...");
+            var notes = timer.Time("overrides", () =>
+            {
+                session.AssertOverrideTargets(lockDoc.Overrides);
+                return OverrideApplier.Apply(r.Profile, lockDoc.Overrides, a => fetcher.Fetch(a, ct));
+            }, _ => $"{lockDoc.Overrides.Count} overrides");
             foreach (var n in notes)
             {
                 _log.WriteLine($"  override {n}");
             }
-            session.Rescan();
+            Status("Updating the CKAN registry...");
+            timer.Time("rescan", session.Rescan);
 
             journal = journal.Advance(TxnState.Verifying);
             journal.Write(r.Profile);
-            result = VerifyAll(session, lockDoc, inventory, ct);
+            // After an update, a file that is still the very file hashed at the last commit (same size, time and file id)
+            // keeps its recorded hash and every file CKAN or an override wrote is hashed; an install hashes everything, and
+            // so does an update when the last full check is old or many incremental updates ago (bit rot, in-place edits).
+            var now = DateTimeOffset.UtcNow;
+            var fullCheck = previousState is null || previousState.NeedsFullCheck(now);
+            result = VerifyAll(session, lockDoc, inventory, fullCheck ? null : previousState, timer, ct);
 
             // ---- commit ----
-            new InstalledState { LockSha256 = lockSha, PackId = lockDoc.Pack.Id, PackVersion = lockDoc.Pack.Version, AppliedUtc = DateTimeOffset.UtcNow, Files = result.Records }.Write(r.Profile);
-            CopyAtomically(r.Lock.LockPath, r.Profile.LockCopyFile);
-            CopyAtomically(r.Lock.InventoryPath, r.Profile.InventoryCopyFile);
-            journal = journal.Advance(TxnState.Committed);
-            journal.Write(r.Profile);
-            committed = true;
+            Status("Saving the new install state...");
+            using (timer.Start("commit"))
+            {
+                new InstalledState
+                {
+                    LockSha256 = lockSha, PackId = lockDoc.Pack.Id, PackVersion = lockDoc.Pack.Version, AppliedUtc = DateTimeOffset.UtcNow, Files = result.Records,
+                    LastFullCheckUtc = fullCheck ? now : previousState!.LastFullCheckUtc,
+                    UpdatesSinceFullCheck = fullCheck ? 0 : previousState!.UpdatesSinceFullCheck + 1,
+                }.Write(r.Profile);
+                CopyAtomically(r.Lock.LockPath, r.Profile.LockCopyFile);
+                CopyAtomically(r.Lock.InventoryPath, r.Profile.InventoryCopyFile);
+                journal = journal.Advance(TxnState.Committed);
+                journal.Write(r.Profile);
+                committed = true;
+            }
         }
         catch (Exception ex) when (!committed)
         {
@@ -258,19 +293,36 @@ public sealed class ProfileOperations
                 // The game folder was not touched. A snapshot cut short (failure or cancel while linking) is useless.
                 if (journal.SnapshotDir is not null)
                 {
-                    TryCleanup("delete the partial snapshot", () => SnapshotEngine.Delete(r.Profile, txnId));
+                    TryCleanup("delete the partial snapshot", () => DiscardSnapshot(r.Profile, txnId, defer: false));
                 }
                 journal = journal.Advance(TxnState.RolledBack, Describe(ex));
                 journal.Write(r.Profile);
+                timer.WriteSummary(ex is OperationCanceledException ? "cancelled before any change" : "failed before any change");
                 throw;
             }
             _log.WriteLine($"Failure after snapshot ({Describe(ex)}); restoring...");
-            RollBack(r.Profile, ref journal, ex, r.KeepSnapshot);
+            Status("Restoring your previous files...");
+            try
+            {
+                using (timer.Start("rollback"))
+                {
+                    RollBack(r.Profile, ref journal, ex, r.KeepSnapshot);
+                }
+            }
+            finally
+            {
+                timer.WriteSummary(ex is OperationCanceledException ? "cancelled, rolled back" : "failed, rolled back");
+            }
             throw;
         }
 
         // ---- after commit: nothing below may undo the transaction ----
-        warnings.AddRange(CleanUpAfterCommit(session, r.Profile, txnId, r.KeepSnapshot));
+        Status("Cleaning up...");
+        using (timer.Start("cleanup"))
+        {
+            warnings.AddRange(CleanUpAfterCommit(session, r.Profile, txnId, r.KeepSnapshot, r.DeferSnapshotDeletion));
+        }
+        timer.WriteSummary("ok");
         foreach (var u in result.UnknownFiles.Take(20))
         {
             warnings.Add($"Unknown file in GameData (left alone): {u}");
@@ -292,7 +344,7 @@ public sealed class ProfileOperations
             if (rb.Errors.Count == 0 && !keepSnapshot)
             {
                 var txnId = journal.TxnId;
-                TryCleanup("delete the snapshot", () => SnapshotEngine.Delete(profile, txnId));
+                TryCleanup("delete the snapshot", () => DiscardSnapshot(profile, txnId, defer: false));
             }
         }
         catch (Exception rbEx)
@@ -313,6 +365,11 @@ public sealed class ProfileOperations
     public RollbackEngine.Result? Recover(ProfilePaths profile, CancellationToken ct = default)
     {
         using var profileLock = ProfileLock.Acquire(profile, "recover");
+        if (SnapshotEngine.HasTrash(profile, _log.WriteLine))
+        {
+            // Discarded snapshots only: the snapshot of an unfinished transaction is never moved to the trash.
+            TryCleanup("delete old snapshot folders", () => SnapshotEngine.EmptyTrash(profile, _log.WriteLine, ct));
+        }
         var journal = TransactionJournal.FindIncomplete(profile);
         if (journal is null)
         {
@@ -326,7 +383,7 @@ public sealed class ProfileOperations
         if (journal.State <= TxnState.Snapshotted)
         {
             // Interrupted before Applying: nothing in the game folder changed. A partial snapshot is useless.
-            TryCleanup("delete the partial snapshot", () => SnapshotEngine.Delete(profile, txnId));
+            TryCleanup("delete the partial snapshot", () => DiscardSnapshot(profile, txnId, defer: false));
             Close(journal, TxnState.RolledBack, new[] { $"interrupted while {journal.State}, before the game folder changed; nothing to restore" });
             _log.WriteLine($"Transaction {txnId} stopped before changing the game folder; closed it.");
             return new RollbackEngine.Result(0, 0, 0, 0, sw.Elapsed, Array.Empty<string>());
@@ -355,7 +412,7 @@ public sealed class ProfileOperations
         if (rb.Errors.Count == 0)
         {
             Close(updated, TxnState.RolledBack, rb.Errors);
-            TryCleanup("delete the snapshot", () => SnapshotEngine.Delete(profile, txnId));
+            TryCleanup("delete the snapshot", () => DiscardSnapshot(profile, txnId, defer: false));
         }
         else if (!isRetry)
         {
@@ -394,6 +451,8 @@ public sealed class ProfileOperations
         var toFix = before.Missing.Concat(before.Modified).Where(p => !disabledTargets.Contains(p.Path)).ToList();
         if (toFix.Count == 0 && (!quarantineUnknownDlls || before.UnknownDlls.Count == 0))
         {
+            // Nothing to fix, but every file was just hashed: that counts as the full check updates are measured against.
+            (state with { Files = before.Records, LastFullCheckUtc = DateTimeOffset.UtcNow, UpdatesSinceFullCheck = 0 }).Write(profile);
             return new RepairReport(null, 0, 0, 0, Array.Empty<string>(), sw.Elapsed);
         }
 
@@ -537,7 +596,11 @@ public sealed class ProfileOperations
             {
                 throw new LauncherException(ErrorCode.VerifyFailed, "Some files could not be repaired.", RecoveryHint.AskHost, details: remaining);
             }
-            new InstalledState { LockSha256 = state.LockSha256, PackId = state.PackId, PackVersion = state.PackVersion, AppliedUtc = DateTimeOffset.UtcNow, Files = after.Records }.Write(profile);
+            new InstalledState
+            {
+                LockSha256 = state.LockSha256, PackId = state.PackId, PackVersion = state.PackVersion, AppliedUtc = DateTimeOffset.UtcNow, Files = after.Records,
+                LastFullCheckUtc = DateTimeOffset.UtcNow, UpdatesSinceFullCheck = 0,
+            }.Write(profile);
             journal = journal.Advance(TxnState.Committed);
             journal.Write(profile);
             committed = true;
@@ -549,7 +612,7 @@ public sealed class ProfileOperations
             {
                 if (journal.SnapshotDir is not null)
                 {
-                    TryCleanup("delete the partial snapshot", () => SnapshotEngine.Delete(profile, txnId));
+                    TryCleanup("delete the partial snapshot", () => DiscardSnapshot(profile, txnId, defer: false));
                 }
                 journal = journal.Advance(TxnState.RolledBack, Describe(ex));
                 journal.Write(profile);
@@ -609,9 +672,11 @@ public sealed class ProfileOperations
         return session.Cache.GetCachedFilename(module) ?? throw new LauncherException(ErrorCode.ArtifactUnavailable, $"No archive for {module.identifier}.", RecoveryHint.Retry);
     }
 
-    private InstallVerifier.Result VerifyAll(ProfileSession session, PackLock lockDoc, InventoryDocument inventory, CancellationToken ct)
+    private InstallVerifier.Result VerifyAll(ProfileSession session, PackLock lockDoc, InventoryDocument inventory, InstalledState? previous, PhaseTimer timer, CancellationToken ct)
     {
         _log.WriteLine("Verifying registry against lock...");
+        Status("Checking the CKAN registry against the pack...");
+        var registryPhase = timer.Start("verify-registry");
         // CKAN's registry lists what CKAN installed: owned files, plus files an override later replaced or
         // disabled (CKAN still owns those paths). Files added by overrides are not CKAN's.
         var ownedPaths = inventory.Files.Where(f => f.Class is FileClass.Owned or FileClass.MutableOwned or FileClass.Custom).Select(f => f.Path)
@@ -619,13 +684,17 @@ public sealed class ProfileOperations
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
         var regProblems = session.VerifyRegistryAgainstLock(ownedPaths);
+        registryPhase.Dispose();
         if (regProblems.Count > 0)
         {
             throw new LauncherException(ErrorCode.VerifyFailed, "The CKAN registry does not match the lock after install.", RecoveryHint.Repair, details: regProblems);
         }
-        _log.WriteLine("Verifying files (full hash)...");
+        // previous is null for an install and for an update that is due a full check (see RunTransaction).
+        var mode = previous is null ? InstallVerifier.Mode.Full : InstallVerifier.Mode.Incremental;
+        _log.WriteLine(mode == InstallVerifier.Mode.Full ? "Verifying files (full hash)..." : "Verifying files (hashing every file that changed)...");
         var verifier = new InstallVerifier(VerifyProgress());
-        var result = verifier.Verify(session.Profile, inventory, lockDoc.FileRules, InstallVerifier.Mode.Full, null, ct);
+        var result = timer.Time("verify-files", () => verifier.Verify(session.Profile, inventory, lockDoc.FileRules, mode, previous, ct),
+            v => $"{v.FilesChecked:N0} files, {v.FilesHashed:N0} hashed");
         _log.WriteLine($"Verified {result.FilesChecked} files ({result.FilesHashed} hashed) in {result.Elapsed}: {result.Missing.Count} missing, {result.Modified.Count} modified, {result.MutableDrift.Count} drift, {result.UnknownFiles.Count} unknown ({result.UnknownDlls.Count} DLLs).");
         // Disabled override targets are expected to be missing from their original path.
         var disabled = lockDoc.Overrides.Where(o => o.Op == "disable").Select(o => o.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -638,8 +707,28 @@ public sealed class ProfileOperations
         return result;
     }
 
-    private Progress<(int Done, int Total)> VerifyProgress()
-        => new Progress<(int Done, int Total)>(p => _progress?.Report(new CkanProgress($"Verifying files {p.Done}/{p.Total}", p.Total == 0 ? 0 : p.Done * 100 / p.Total, null)));
+    /// <summary>A status line for the UI with no percentage, so a long phase names what it is doing.</summary>
+    private void Status(string message) => _progress?.Report(new CkanProgress(message, -1, null));
+
+    /// <summary>
+    /// Forwards the verifier's counts as they happen (not posted to the thread pool, which delivered them late and out
+    /// of order); the verifier reports from several threads, so calls are serialized.
+    /// </summary>
+    private SerialProgress<(int Done, int Total)> VerifyProgress() => new SerialProgress<(int Done, int Total)>(p =>
+        _progress?.Report(new CkanProgress($"Verifying files {p.Done:N0}/{p.Total:N0}", p.Total == 0 ? 0 : (int)(p.Done * 100L / p.Total), null)));
+
+    private sealed class SerialProgress<T>(Action<T> report) : IProgress<T>
+    {
+        private readonly object _gate = new();
+
+        public void Report(T value)
+        {
+            lock (_gate)
+            {
+                report(value);
+            }
+        }
+    }
 
     private void HandleSideloads(ProfileSession session, PrefetchPlan plan, IReadOnlyDictionary<string, string>? provided, CancellationToken ct)
     {
@@ -701,7 +790,7 @@ public sealed class ProfileOperations
     }
 
     /// <summary>Releases CKAN and removes the snapshot after a commit. Failures here are warnings, never a rollback.</summary>
-    private List<string> CleanUpAfterCommit(ProfileSession? session, ProfilePaths profile, string txnId, bool keepSnapshot)
+    private List<string> CleanUpAfterCommit(ProfileSession? session, ProfilePaths profile, string txnId, bool keepSnapshot, bool deferSnapshotDeletion = false)
     {
         var warnings = new List<string>();
         void Step(string what, Action action)
@@ -715,9 +804,64 @@ public sealed class ProfileOperations
         Step("clean CKAN temp folders", () => CleanCkanTempDirs(profile));
         if (!keepSnapshot)
         {
-            Step("delete the snapshot", () => SnapshotEngine.Delete(profile, txnId));
+            Step("delete the snapshot", () => DiscardSnapshot(profile, txnId, deferSnapshotDeletion));
         }
         return warnings;
+    }
+
+    /// <summary>
+    /// Takes a snapshot nothing restores from any more out of the way (an instant rename into the profile's trash) and,
+    /// unless <paramref name="defer"/>, deletes it now. Only called once the journal says Committed or RolledBack, or for
+    /// a partial snapshot, so a crash at any point leaves at worst a trash folder, which <see cref="EmptyTrash"/> removes.
+    /// </summary>
+    private static void DiscardSnapshot(ProfilePaths profile, string txnId, bool defer)
+    {
+        SnapshotEngine.Discard(profile, txnId);
+        if (!defer)
+        {
+            SnapshotEngine.EmptyTrash(profile);
+        }
+    }
+
+    /// <summary>Deletes discarded snapshots (deferred after an operation, or left by a crash). Holds the profile lock; returns false when the profile is busy.</summary>
+    public bool EmptyTrash(ProfilePaths profile, CancellationToken ct = default)
+    {
+        if (!SnapshotEngine.HasTrash(profile, _log.WriteLine))
+        {
+            return true;
+        }
+        ProfileLock profileLock;
+        try
+        {
+            profileLock = ProfileLock.Acquire(profile, "cleanup");
+        }
+        catch (LauncherException ex) when (ex.Code == ErrorCode.ProfileBusy)
+        {
+            return false;
+        }
+        using (profileLock)
+        {
+            var sw = Stopwatch.StartNew();
+            var n = SnapshotEngine.EmptyTrash(profile, _log.WriteLine, ct);
+            _log.WriteLine($"Deleted {n} old snapshot folder(s) in {PhaseTimer.Format(sw.Elapsed)}.");
+            return true;
+        }
+    }
+
+    /// <summary>Trash a crash or a closed app left behind goes before a new transaction adds its own snapshot.</summary>
+    private void EmptyLeftoverTrash(ProfilePaths profile, PhaseTimer timer, List<string> warnings)
+    {
+        if (!SnapshotEngine.HasTrash(profile, _log.WriteLine))
+        {
+            return;
+        }
+        using (timer.Start("old-snapshots"))
+        {
+            if (TryCleanup("delete old snapshot folders", () => SnapshotEngine.EmptyTrash(profile, _log.WriteLine)) is { } warning)
+            {
+                warnings.Add(warning);
+            }
+        }
     }
 
     /// <summary>Runs a best-effort step; returns a warning (also logged) when it fails.</summary>

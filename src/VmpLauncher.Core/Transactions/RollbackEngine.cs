@@ -88,27 +88,22 @@ public static class RollbackEngine
         }
 
         // 2. Restore snapshot files: same file id → untouched; otherwise re-link/copy.
+        // The checks only read, so they run on several threads; every change below happens on this thread, in order.
         var untouched = 0;
         var restored = 0;
-        foreach (var entry in manifest.Files)
+        var checks = new (bool SnapExists, bool ReparseAbove, bool Exists, bool Same)[manifest.Files.Count];
+        ParallelFiles.For(checks.Length, FileParallelism.For(profile.GameDir), i =>
         {
-            ct.ThrowIfCancellationRequested();
+            var entry = manifest.Files[i];
             var abs = Path.Combine(profile.GameDir, entry.Path.Replace('/', Path.DirectorySeparatorChar));
             var snap = Path.Combine(gameSnap, entry.Path.Replace('/', Path.DirectorySeparatorChar));
-            if (!File.Exists(snap))
+            var snapExists = File.Exists(snap);
+            var reparseAbove = snapExists && SafePath.HasReparsePointAbove(profile.GameDir, abs);
+            var exists = snapExists && !reparseAbove && File.Exists(abs);
+            var same = false;
+            if (exists)
             {
-                errors.Add($"snapshot missing {entry.Path}");
-                continue;
-            }
-            if (SafePath.HasReparsePointAbove(profile.GameDir, abs))
-            {
-                errors.Add($"restore {entry.Path}: a folder on the path is a junction or symbolic link");
-                continue;
-            }
-            if (File.Exists(abs))
-            {
-                var same = false;
-                if (isWindows && entry.FileId is not null)
+                if (isWindows && OperatingSystem.IsWindows() && entry.FileId is not null)
                 {
                     try { same = NativeFiles.FileIdString(abs) == entry.FileId; } catch (Exception) { }
                 }
@@ -117,7 +112,29 @@ public static class RollbackEngine
                     var fi = new FileInfo(abs);
                     same = fi.Length == entry.Size && fi.LastWriteTimeUtc.Ticks == entry.LastWriteTicks;
                 }
-                if (same)
+            }
+            checks[i] = (snapExists, reparseAbove, exists, same);
+        }, ct);
+        for (var i = 0; i < manifest.Files.Count; i++)
+        {
+            ct.ThrowIfCancellationRequested();
+            var entry = manifest.Files[i];
+            var check = checks[i];
+            var abs = Path.Combine(profile.GameDir, entry.Path.Replace('/', Path.DirectorySeparatorChar));
+            var snap = Path.Combine(gameSnap, entry.Path.Replace('/', Path.DirectorySeparatorChar));
+            if (!check.SnapExists)
+            {
+                errors.Add($"snapshot missing {entry.Path}");
+                continue;
+            }
+            if (check.ReparseAbove)
+            {
+                errors.Add($"restore {entry.Path}: a folder on the path is a junction or symbolic link");
+                continue;
+            }
+            if (check.Exists)
+            {
+                if (check.Same)
                 {
                     untouched++;
                     continue;

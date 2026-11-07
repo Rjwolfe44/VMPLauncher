@@ -10,6 +10,8 @@ using Xunit;
 namespace VmpLauncher.IntegrationTests;
 
 /// <summary>Vlad's library as a second CKAN repository, against the fixture CKAN universe and the real CKAN engine.</summary>
+// Same collection as the transaction tests: those dispose every CKAN registry manager in the process (Recover, TestWorld).
+[Collection("ckan")]
 public sealed class LibraryCatalogTests : IDisposable
 {
     private readonly TestWorld _w = new("library");
