@@ -48,12 +48,7 @@
       "distribution": { "kind": "private-github", "repo": "Rjwolfe44/VMP-Private-Mods", "tagPrefix": "apex-", "hint": "Paste the invite code from the server host, or ask the host for the ApexGuidance zip." }
     }
   ],
-  "overrides": [
-    {
-      "op": "add",
-      "path": "GameData/VladFixes/InterstellarFuelSwitch/IFS_NoFlightTankRebuild.cfg"
-    }
-  ],
+  "overrides": [],
   "fileRules": {
     "generated": [
       "GameData/ModuleManager.ConfigCache", "GameData/ModuleManager.ConfigSHA", "GameData/ModuleManager.Physics",
