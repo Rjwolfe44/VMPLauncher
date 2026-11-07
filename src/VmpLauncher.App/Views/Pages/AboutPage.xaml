@@ -33,6 +33,31 @@
             </Border>
             <Border Style="{StaticResource Space.Card}" Margin="0,16,0,0">
                 <StackPanel>
+                    <TextBlock Style="{StaticResource Space.SectionTitle}" Text="Playtime" />
+                    <TextBlock Style="{StaticResource Space.Style.Display}" Text="{Binding PlaytimeTotal}" />
+                    <Grid Margin="0,12,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="170" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0" Style="{StaticResource Space.Style.Secondary}" Text="Steam" />
+                        <TextBlock Grid.Row="0" Grid.Column="1" Style="{StaticResource Space.Style.Body}" Text="{Binding SteamPlaytime}" />
+                        <TextBlock Grid.Row="1" Style="{StaticResource Space.Style.Secondary}" Text="CKAN" Margin="0,4,0,0" />
+                        <TextBlock Grid.Row="1" Grid.Column="1" Style="{StaticResource Space.Style.Body}" Text="{Binding CkanPlaytime}" Margin="0,4,0,0" />
+                        <TextBlock Grid.Row="2" Style="{StaticResource Space.Style.Secondary}" Text="VMP (this launcher)" Margin="0,4,0,0" />
+                        <TextBlock Grid.Row="2" Grid.Column="1" Style="{StaticResource Space.Style.Body}" Text="{Binding VmpPlaytime}" Margin="0,4,0,0" />
+                    </Grid>
+                    <ui:Button Content="Refresh" Command="{Binding RefreshPlaytimeCommand}" Icon="{ui:SymbolIcon ArrowSync24}" Margin="0,12,0,0" />
+                    <TextBlock Style="{StaticResource Space.Style.Caption}" Margin="0,10,0,0" TextWrapping="Wrap" Text="{Binding PlaytimeNote}" />
+                </StackPanel>
+            </Border>
+            <Border Style="{StaticResource Space.Card}" Margin="0,16,0,0">
+                <StackPanel>
                     <TextBlock Style="{StaticResource Space.SectionTitle}" Text="Environment" />
                     <TextBlock Style="{StaticResource Space.Style.Mono}" Text="{Binding CkanVersion, StringFormat=CKAN core {0}}" />
                     <TextBlock Style="{StaticResource Space.Style.Mono}" Text="{Binding Runtime}" />

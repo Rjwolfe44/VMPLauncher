@@ -106,7 +106,7 @@ public sealed partial class UpdateService : ObservableObject, IDisposable
             var info = await _manager.CheckForUpdatesAsync().ConfigureAwait(false);
             if (info is null)
             {
-                Status = $"Up to date ({_manager.CurrentVersion}). Checked {DateTime.Now:HH:mm}.";
+                Status = $"Up to date ({_manager.CurrentVersion}). Checked {DisplayTime.Time(DateTime.Now)}.";
                 return;
             }
             AvailableVersion = info.TargetFullRelease.Version.ToString();

@@ -58,9 +58,11 @@ public partial class PlayViewModel : ObservableObject
 
     private readonly PackUpdateService _packUpdates;
     private readonly IContentDialogService _dialogs;
+    private readonly PlaytimeCounter _playtime;
 
-    public PlayViewModel(LauncherService launcher, AppSettingsStore settings, ISecretStore secrets, ServerStatusService server, IAppNavigator navigation, PackUpdateService packUpdates, IContentDialogService dialogs, ILogger<PlayViewModel> log)
+    public PlayViewModel(LauncherService launcher, AppSettingsStore settings, ISecretStore secrets, ServerStatusService server, IAppNavigator navigation, PackUpdateService packUpdates, IContentDialogService dialogs, PlaytimeCounter playtime, ILogger<PlayViewModel> log)
     {
+        _playtime = playtime;
         _launcher = launcher;
         _dialogs = dialogs;
         _packUpdates = packUpdates;
@@ -331,13 +333,13 @@ public partial class PlayViewModel : ObservableObject
             using var process = _launcher.Launch(join, entries);
             ShowTextureNotice = _settings.Current.TextureQualityNotice;
             GameRunning = true;
-            RunningSince = DateTime.Now.ToString("HH:mm");
+            RunningSince = DisplayTime.Time(DateTime.Now);
             UpdatePreflight();
             if (_settings.Current.MinimizeWhilePlaying && System.Windows.Application.Current.MainWindow is { } w)
             {
                 w.WindowState = System.Windows.WindowState.Minimized;
             }
-            await process.WaitForExitAsync(ct);
+            await _playtime.TrackAsync(_settings.Current.ActiveProfileId, process.WaitForExitAsync(ct), ct);
         }
         catch (OperationCanceledException)
         {

@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.4.5
+
+### Added
+
+- **Playtime** card on the About page: total time in Kerbal Space Program, with separate rows for Steam, CKAN and
+  VMP (games started from this launcher) and a Refresh button. The three are separate launches, so nothing is counted twice.
+  Steam's number is your Steam account's total (it can include other PCs). Steam's `localconfig.vdf` and CKAN's
+  `playtime.json` are only read (KSP's own entries, when the card is shown or Refresh is pressed), never changed, and
+  nothing leaves the PC. VMP time is counted from this version on (there is no history to backfill); it is saved about
+  every minute while the game runs, so a crash of the launcher loses at most a minute.
+
+### Changed
+
+- Times shown in the launcher (last update check, "KSP is running since", last played) use your PC's local time with a
+  12-hour clock and AM/PM instead of 24-hour times.
+
 ## 0.4.4
 
 ### Changed

@@ -145,7 +145,7 @@ public partial class HomeViewModel : ObservableObject
             UpdatePrivate();
             UpdateRequirements(pack);
             UpdateState();
-            LastCheck = $"Checked {DateTime.Now:HH:mm} · {pack.Source}";
+            LastCheck = $"Checked {DisplayTime.Time(DateTime.Now)} · {pack.Source}";
             _ = _server.LoadAsync(pack, force: false, CancellationToken.None);
             await MaybeAutoUpdateAsync();
             if (_state == ProfileState.Installed)

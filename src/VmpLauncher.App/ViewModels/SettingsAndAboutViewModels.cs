@@ -323,9 +323,39 @@ public partial class SettingsViewModel : ObservableObject
 
 public partial class AboutViewModel : ObservableObject
 {
-    public AboutViewModel(UpdateService updates)
+    private readonly PlaytimeService _playtime;
+    private bool _playtimeLoaded;
+
+    public AboutViewModel(UpdateService updates, PlaytimeService playtime)
     {
         Updates = updates;
+        _playtime = playtime;
+    }
+
+    [ObservableProperty] private string _playtimeTotal = "Total time in KSP: …";
+    [ObservableProperty] private string _steamPlaytime = "not found";
+    [ObservableProperty] private string _ckanPlaytime = "not found";
+    [ObservableProperty] private string _vmpPlaytime = "0 min";
+
+    public string PlaytimeNote =>
+        "Counted separately so nothing is double counted: Steam = launches from Steam (your Steam account's total, which can include other PCs), " +
+        "CKAN = its Play button, VMP = games started from this launcher (counting started with launcher 0.4.5). " +
+        "Read on this PC only, never sent anywhere.";
+
+    /// <summary>Reads Steam and CKAN the first time the card is shown; Refresh reads them again.</summary>
+    public Task OnShownAsync() => _playtimeLoaded ? Task.CompletedTask : RefreshPlaytimeAsync();
+
+    [RelayCommand]
+    private async Task RefreshPlaytimeAsync()
+    {
+        _playtimeLoaded = true;
+        var s = await Task.Run(() => _playtime.Read(refresh: true));
+        PlaytimeTotal = "Total time in KSP: " + PlaytimeService.Format(s.Total);
+        SteamPlaytime = s.Steam is { } st
+            ? PlaytimeService.Format(st) + (s.SteamLastPlayedUtc is { } lp ? $" (last played {DisplayTime.DateTimeText(lp)})" : string.Empty)
+            : "not found";
+        CkanPlaytime = s.Ckan is { } ck ? PlaytimeService.Format(ck) : "not found";
+        VmpPlaytime = PlaytimeService.Format(s.Vmp) + (s.VmpSessions > 0 ? $" ({s.VmpSessions} sessions)" : string.Empty);
     }
 
     public UpdateService Updates { get; }

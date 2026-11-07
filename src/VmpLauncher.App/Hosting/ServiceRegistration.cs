@@ -30,6 +30,9 @@ public static class ServiceRegistration
         // CKAN is not thread-safe: the pack and the mod manager share one CKAN thread.
         services.AddSingleton<VmpLauncher.Ckan.Backend.CkanWorker>();
         services.AddSingleton<TextureQualityService>();
+        services.AddSingleton<PlaytimeCounter>();
+        services.AddSingleton<IPlaytimeEnvironment, WindowsPlaytimeEnvironment>();
+        services.AddSingleton<PlaytimeService>();
         services.AddSingleton<LauncherService>();
         services.AddSingleton<PackUpdateService>();
         services.AddSingleton<RecoveryActions>();

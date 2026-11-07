@@ -52,6 +52,14 @@ chose in KSP afterwards), *Leave as it is*, *Full*, *Half* or *Quarter*. The cha
 starts. The launcher edits only the `TEXTURE_QUALITY` line of the profile's `settings.cfg`, keeps the first original
 as `settings.cfg.vmpl-backup`, and never touches your own KSP folder.
 
+## Playtime
+
+**About → Playtime** shows the total time you have spent in KSP: Steam (your Steam account's counter, read from its
+`localconfig.vdf`, so it can include other PCs), CKAN (the `CKAN\playtime.json` of each KSP folder your CKAN knows) and
+VMP (games started from this launcher, counted from launcher 0.4.5 on). They are separate launches, so they are simply
+added. Everything is read on this PC only when you open the card or press Refresh, Steam's and CKAN's files are never
+changed, and nothing is sent anywhere.
+
 ## For friends
 
 1. Download `VmpLauncher-win-Setup.exe` from the latest GitHub release. Windows SmartScreen may show

@@ -10,6 +10,7 @@ public partial class AboutPage : UserControl
         ViewModel = viewModel;
         DataContext = viewModel;
         InitializeComponent();
+        Loaded += async (_, _) => await ViewModel.OnShownAsync();
     }
 
     public AboutViewModel ViewModel { get; }
