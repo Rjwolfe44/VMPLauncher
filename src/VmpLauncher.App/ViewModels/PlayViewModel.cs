@@ -71,6 +71,8 @@ public partial class PlayViewModel : ObservableObject
         _log = log;
         _playerName = settings.Current.PlayerName ?? string.Empty;
         _hasPassword = secrets.Has(launcher.PasswordKey);
+        _showTextureNotice = settings.Current.TextureQualityNotice;
+        settings.Changed += s => { if (!s.TextureQualityNotice) { ShowTextureNotice = false; } };
         launcher.StateChanged += UpdatePreflight;
         launcher.PrivateMods.Changed += () => { HasPassword = _secrets.Has(_launcher.PasswordKey); UpdatePreflight(); };
     }
@@ -81,6 +83,9 @@ public partial class PlayViewModel : ObservableObject
 
     [ObservableProperty] private string _playerName = string.Empty;
     [ObservableProperty] private bool _hasPassword;
+    /// <summary>Auto changed the texture quality from Full to Half; shown until the player dismisses it (or opens the setting).</summary>
+    [ObservableProperty] private bool _showTextureNotice;
+    public string TextureNoticeText => TextureQualityService.NoticeText;
     [ObservableProperty] private string _passwordInput = string.Empty;
     [ObservableProperty] private bool _canPlay;
     [ObservableProperty] private bool _canLaunchOffline;
@@ -286,6 +291,12 @@ public partial class PlayViewModel : ObservableObject
     private void GoHome() => _navigation.Navigate(AppPage.Home);
 
     [RelayCommand]
+    private void OpenTextureSetting() => _navigation.Navigate(AppPage.Settings);
+
+    [RelayCommand]
+    private void DismissTextureNotice() => _settings.Update(s => s with { TextureQualityNotice = false });
+
+    [RelayCommand]
     private Task PlayAsync(CancellationToken ct)
         => RunGameAsync(() => Server.Selected?.EntryName ?? throw new InvalidOperationException("Pick a server route."), ct);
 
@@ -318,6 +329,7 @@ public partial class PlayViewModel : ObservableObject
             }
             var entries = Routes.Select(r => new VmpSettingsFile.ServerEntry(r.EntryName, r.Host, r.Port, null)).ToList();
             using var process = _launcher.Launch(join, entries);
+            ShowTextureNotice = _settings.Current.TextureQualityNotice;
             GameRunning = true;
             RunningSince = DateTime.Now.ToString("HH:mm");
             UpdatePreflight();

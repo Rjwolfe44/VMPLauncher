@@ -39,6 +39,12 @@ public sealed record AppSettings
     public string? LocalLibraryDir { get; init; }
     /// <summary>Servers the player added on the Play page (for example the pack server's home-network address). Never published.</summary>
     public List<VmpLauncher.Net.Directory.MyServer> MyServers { get; init; } = new();
+    /// <summary>KSP texture quality at launch: auto (Half, once per profile) | leave | full | half | quarter. See <see cref="VmpLauncher.Core.Profiles.TextureQualitySetting"/>.</summary>
+    public string TextureQualityPolicy { get; init; } = "auto";
+    /// <summary>Profiles the Auto policy already looked at; Auto never touches them again.</summary>
+    public List<string> TextureQualityAutoDone { get; init; } = new();
+    /// <summary>Auto changed Full to Half and the player has not seen the note on the Play page yet.</summary>
+    public bool TextureQualityNotice { get; init; }
 }
 
 public sealed class AppSettingsStore

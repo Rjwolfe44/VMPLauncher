@@ -17,8 +17,20 @@ public partial class PrivateRepoRow : ObservableObject
     [ObservableProperty] private string _statusKind = "neutral";
 }
 
+public sealed record TextureQualityChoice(string Id, string Label);
+
 public partial class SettingsViewModel : ObservableObject
 {
+    /// <summary>The texture-quality choices, in plain English. Ids are what settings.json stores.</summary>
+    public static IReadOnlyList<TextureQualityChoice> TextureQualityChoices { get; } = new[]
+    {
+        new TextureQualityChoice("auto", "Auto (Half)"),
+        new TextureQualityChoice("leave", "Leave as it is"),
+        new TextureQualityChoice("full", "Full"),
+        new TextureQualityChoice("half", "Half"),
+        new TextureQualityChoice("quarter", "Quarter"),
+    };
+
     private readonly AppSettingsStore _settings;
     private readonly LauncherPaths _paths;
     private readonly LauncherService _launcher;
@@ -46,6 +58,7 @@ public partial class SettingsViewModel : ObservableObject
         _autoCheckUpdates = s.AutoCheckUpdates;
         _autoUpdatePack = s.AutoUpdatePack;
         _kspOnMainMonitor = s.KspOnMainMonitor;
+        _textureQualityPolicy = VmpLauncher.Core.Profiles.TextureQualitySetting.ToId(VmpLauncher.Core.Profiles.TextureQualitySetting.FromId(s.TextureQualityPolicy));
         _betaChannel = s.UpdateChannel == "beta";
         _textScalePercent = (int)Math.Round(s.TextScale * 100);
         launcher.PrivateMods.Changed += LoadRepos;
@@ -67,6 +80,7 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private bool _autoCheckUpdates;
     [ObservableProperty] private bool _autoUpdatePack;
     [ObservableProperty] private bool _kspOnMainMonitor;
+    [ObservableProperty] private string _textureQualityPolicy;
     [ObservableProperty] private bool _betaChannel;
     [ObservableProperty] private int _textScalePercent = 100;
     [ObservableProperty] private string _cacheSize = string.Empty;
@@ -88,6 +102,8 @@ public partial class SettingsViewModel : ObservableObject
     partial void OnAutoCheckUpdatesChanged(bool value) => _settings.Update(s => s with { AutoCheckUpdates = value });
     partial void OnAutoUpdatePackChanged(bool value) => _settings.Update(s => s with { AutoUpdatePack = value });
     partial void OnKspOnMainMonitorChanged(bool value) => _settings.Update(s => s with { KspOnMainMonitor = value });
+    // Choosing a value here also clears the "set to Half" note on the Play page: the player has seen where it lives.
+    partial void OnTextureQualityPolicyChanged(string value) => _settings.Update(s => s with { TextureQualityPolicy = value, TextureQualityNotice = false });
     partial void OnBetaChannelChanged(bool value) => _settings.Update(s => s with { UpdateChannel = value ? "beta" : "win" });
     partial void OnTextScalePercentChanged(int value) => _settings.Update(s => s with { TextScale = Math.Clamp(value, 100, 200) / 100.0 });
     partial void OnLocalPackDirChanged(string value) => _settings.Update(s => s with { LocalPackDir = string.IsNullOrWhiteSpace(value) ? null : value.Trim() });

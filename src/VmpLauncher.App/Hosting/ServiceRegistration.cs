@@ -29,6 +29,7 @@ public static class ServiceRegistration
         services.AddSingleton<PrivateModsService>();
         // CKAN is not thread-safe: the pack and the mod manager share one CKAN thread.
         services.AddSingleton<VmpLauncher.Ckan.Backend.CkanWorker>();
+        services.AddSingleton<TextureQualityService>();
         services.AddSingleton<LauncherService>();
         services.AddSingleton<PackUpdateService>();
         services.AddSingleton<RecoveryActions>();

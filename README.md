@@ -43,6 +43,15 @@ The CKAN mod list is the launcher's own copy (refreshed every few days, or with 
 settings, instances and cache are only read, never changed. The full list takes about 0.3 GB of memory while the
 Mods page has been opened (it peaks near 1 GB for a few seconds while it loads, then the launcher hands the rest back).
 
+## Texture quality
+
+KSP's texture quality is the biggest single memory saving a heavily modded game has, so the launcher sets it to
+**Half** for you, once per profile, the first time it starts the game with Full selected. Choose differently under
+**Settings → Pack and game → Texture quality**: *Auto (Half)* (default; never changes a value you already lowered or
+chose in KSP afterwards), *Leave as it is*, *Full*, *Half* or *Quarter*. The change applies the next time the game
+starts. The launcher edits only the `TEXTURE_QUALITY` line of the profile's `settings.cfg`, keeps the first original
+as `settings.cfg.vmpl-backup`, and never touches your own KSP folder.
+
 ## For friends
 
 1. Download `VmpLauncher-win-Setup.exe` from the latest GitHub release. Windows SmartScreen may show

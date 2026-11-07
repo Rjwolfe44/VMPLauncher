@@ -40,10 +40,12 @@ public sealed class LauncherService : IDisposable
     private readonly OperationRunner _runner;
     private readonly ILogger<LauncherService> _log;
     private readonly VmpLauncher.Ckan.Backend.CkanWorker _worker;
+    private readonly TextureQualityService _texture;
 
-    public LauncherService(LauncherPaths paths, AppSettingsStore settings, ISecretStore secrets, PackCatalogService catalog, PrivateModsService privateMods, OperationRunner runner, VmpLauncher.Ckan.Backend.CkanWorker worker, ILogger<LauncherService> log)
+    public LauncherService(LauncherPaths paths, AppSettingsStore settings, ISecretStore secrets, PackCatalogService catalog, PrivateModsService privateMods, OperationRunner runner, VmpLauncher.Ckan.Backend.CkanWorker worker, TextureQualityService texture, ILogger<LauncherService> log)
     {
         _worker = worker;
+        _texture = texture;
         _paths = paths;
         _settings = settings;
         _secrets = secrets;
@@ -428,6 +430,8 @@ public sealed class LauncherService : IDisposable
             new ProfileStore(_paths).Register(_settings.Current.ActiveProfileId, root);
         }
         _log.LogInformation("Seeded profile {Root}: {Linked} linked, {Copied} copied", profile.Root, result.FilesLinked, result.FilesCopied);
+        // The copy of the player's own settings.cfg is ours to edit (the player's KSP folder is never touched).
+        _texture.Apply(_settings.Current.ActiveProfileId, profile.GameDir, freshlySeeded: true);
         return profile;
     }
 
@@ -439,6 +443,8 @@ public sealed class LauncherService : IDisposable
         {
             GameProcessGuard.ThrowIfRunning(profile.GameDir);
         }
+        // KSP is not running here (checked above), so settings.cfg is safe to edit; the change shows at this game start.
+        _texture.Apply(_settings.Current.ActiveProfileId, profile.GameDir);
         var s = _settings.Current;
         var settingsPath = VmpSettingsFile.PathFor(profile.GameDir);
         var doc = VmpSettingsFile.LoadOrCreate(settingsPath);

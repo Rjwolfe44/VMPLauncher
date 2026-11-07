@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.4.4
+
+### Changed
+
+- KSP now starts with Half texture quality by default, which uses much less memory (a heavily modded game on a 32 GB
+  PC can otherwise fill all of it and stall while Windows pages it out). The first time you press Play after updating,
+  the launcher changes `TEXTURE_QUALITY` in the pack copy's `settings.cfg` from Full to Half, once. After that it
+  never changes it again: if you pick another value in KSP's own settings, it stays. A value you had already lowered
+  (Half, Quarter or Eighth) is left as it is. It takes effect the next time the game starts, and the Play page says
+  so once, with a link to Settings.
+- New **Texture quality** setting under Settings, Pack and game: *Auto (Half)* (the default), *Leave as it is*,
+  *Full*, *Half* or *Quarter*. Full, Half and Quarter are set at every launch; *Leave as it is* never touches the file.
+  Your own KSP folder (a "Your KSP folder" setup) is never touched.
+- Only that one line of `settings.cfg` is edited (everything else stays byte for byte), the first original is kept as
+  `settings.cfg.vmpl-backup` next to it, the write is atomic, and nothing is done while KSP runs from that folder or when
+  the file is read-only or locked (the log says so and the game still starts). If KSP has not written a `settings.cfg`
+  yet, nothing is created; the setting is applied at the first launch after KSP has made one. The launcher log
+  records what was read and what was written (`Texture quality: ...`).
+
 ## 0.4.3
 
 ### Changed

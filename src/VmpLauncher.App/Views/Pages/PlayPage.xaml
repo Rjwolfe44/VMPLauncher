@@ -14,6 +14,17 @@
             <TextBlock Style="{StaticResource Space.Style.Secondary}" Text="Pick how to reach the server, check you're ready, and launch." />
             <ContentControl Content="{Binding Error}" ContentTemplate="{StaticResource ErrorCardTemplate}" Visibility="{Binding Error, Converter={StaticResource NullToVisibility}}" Focusable="False" />
 
+            <!-- Shown once after Auto changed the texture quality; "Settings" opens it, "Got it" hides it for good -->
+            <Border Style="{StaticResource Space.Card}" Margin="0,16,0,0" Padding="16,10" Visibility="{Binding ShowTextureNotice, Converter={StaticResource BoolToVisibility}}">
+                <DockPanel>
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                        <ui:Button Content="Settings" Command="{Binding OpenTextureSettingCommand}" Margin="12,0,8,0" />
+                        <ui:Button Content="Got it" Command="{Binding DismissTextureNoticeCommand}" />
+                    </StackPanel>
+                    <TextBlock Style="{StaticResource Space.Style.Body}" Text="{Binding TextureNoticeText}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                </DockPanel>
+            </Border>
+
             <Grid Margin="0,20,0,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="3*" />

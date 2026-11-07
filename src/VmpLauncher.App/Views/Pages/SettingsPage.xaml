@@ -75,6 +75,17 @@
                     <ui:ToggleSwitch Content="Borderless window (-popupwindow)" IsChecked="{Binding BorderlessWindow}" Margin="0,10,0,0" />
                     <ui:ToggleSwitch Content="Minimize the launcher while playing" IsChecked="{Binding MinimizeWhilePlaying}" Margin="0,10,0,0" />
                     <ui:ToggleSwitch Content="VMP disclaimer accepted" IsChecked="{Binding DisclaimerAccepted}" Margin="0,10,0,0" />
+                    <Grid Margin="0,14,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource Space.Style.Body}" Text="Texture quality" VerticalAlignment="Center" />
+                        <ComboBox Grid.Column="1" Width="190" ItemsSource="{x:Static vm:SettingsViewModel.TextureQualityChoices}" DisplayMemberPath="Label" SelectedValuePath="Id"
+                                  SelectedValue="{Binding TextureQualityPolicy, Mode=TwoWay}" AutomationProperties.Name="Texture quality" />
+                    </Grid>
+                    <TextBlock Style="{StaticResource Space.Style.Caption}" Margin="0,4,0,0" TextWrapping="Wrap"
+                               Text="Lower texture quality uses much less memory. Half is recommended for PCs with 32 GB or less. Takes effect the next time the game starts." />
                 </StackPanel>
             </Border>
 

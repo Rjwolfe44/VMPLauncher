@@ -39,10 +39,12 @@ public sealed class SetupService
     private readonly AppSettingsStore _settings;
     private readonly LauncherService _launcher;
     private readonly OperationRunner _runner;
+    private readonly TextureQualityService _texture;
     private readonly ILogger<SetupService> _log;
 
-    public SetupService(LauncherPaths paths, AppSettingsStore settings, LauncherService launcher, OperationRunner runner, ILogger<SetupService> log)
+    public SetupService(LauncherPaths paths, AppSettingsStore settings, LauncherService launcher, OperationRunner runner, TextureQualityService texture, ILogger<SetupService> log)
     {
+        _texture = texture;
         _paths = paths;
         _settings = settings;
         _launcher = launcher;
@@ -172,6 +174,7 @@ public sealed class SetupService
                     },
                 });
                 _log.LogInformation("Setup {Id} created from {Source}: {Linked} linked, {Copied} copied", id, source, result.FilesLinked, result.FilesCopied);
+                _texture.Apply(id, profile.GameDir, freshlySeeded: true);
             }
             catch
             {
@@ -291,6 +294,14 @@ public sealed class SetupService
         if (OperatingSystem.IsWindows())
         {
             GameProcessGuard.ThrowIfRunning(setup.GameDir);
+        }
+        if (setup.Kind == SetupKinds.Existing)
+        {
+            _log.LogInformation("Texture quality: {Dir} is your own KSP folder, so its settings.cfg is not touched", setup.GameDir);
+        }
+        else
+        {
+            _texture.Apply(setup.Id, setup.GameDir);
         }
         var s = _settings.Current;
         var extra = s.KspOnMainMonitor ? new[] { "-monitor", "1" } : Array.Empty<string>();
